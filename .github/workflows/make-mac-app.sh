@@ -191,11 +191,10 @@ fi
 mkdir -p dvdisaster.app/Contents/Resources/documentation
 
 # Copy documentation files to the documentation directory
-cp CHANGELOG TODO COPYING CREDITS.* documentation/dvdisaster.*.1 documentation/user-manual/manual.pdf dvdisaster.app/Contents/Resources/documentation
+cp CHANGELOG COPYING CREDITS.* documentation/dvdisaster.*.1 dvdisaster.app/Contents/Resources/documentation
 
-# Create locale directory and copy localization files
-mkdir -p dvdisaster.app/Contents/Resources/locale
-find locale/* -maxdepth 0 -type d -exec cp -r {} dvdisaster.app/Contents/Resources/locale/ \;
+# Upstream locale files are not shipped: they no longer match this fork's
+# strings (own translations will return once the fork's strings settle).
 
 # Copy the application icon to the resources directory
 cp macinst/dvdisaster.icns dvdisaster.app/Contents/Resources/

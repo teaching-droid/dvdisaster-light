@@ -23,9 +23,8 @@ archive=dvdisaster-$(echo "$github_ref" | grep -Eo '[^/]+$')-$suffix.zip
 [ -n "$GITHUB_OUTPUT" ] && echo "archive=$archive" >> "$GITHUB_OUTPUT"
 echo "!> Appimage is <$archive>"
 
-echo "!> Copying locales"
-mkdir -p dist/locale
-cp -va locale/*/ dist/locale/
+# Upstream locale files are not shipped: they no longer match this fork's
+# strings (own translations will return once the fork's strings settle).
 
 # WINDOWS 32/64
 if [ "$os" != "linux64" ]; then
@@ -73,25 +72,25 @@ if [ "$os" != "linux64" ]; then
   find dist -type f -name "*.a" -print -delete
 
   echo "!> Copy and rename text files"
-  for file in CHANGELOG TODO COPYING CREDITS.* TODO
+  for file in CHANGELOG COPYING CREDITS.*
   do
     cp -va "$file" "dist/$file.txt"
   done
 
   echo "!> Copy other files"
-  for file in dvdisaster.exe documentation/user-manual/manual.pdf
+  for file in dvdisaster.exe
   do
     cp -va "$file" dist/
   done
 # /WINDOWS
 else
 # Linux
-  echo "!> Copying text, man and pdf files"
-  cp -va CHANGELOG TODO COPYING CREDITS.* dvdisaster documentation/dvdisaster.*.1 documentation/user-manual/manual.pdf dist/
+  echo "!> Copying text and man files"
+  cp -va CHANGELOG COPYING CREDITS.* dvdisaster documentation/dvdisaster.*.1 dist/
 fi
 
-echo "!> Copying manual to dist"
-cp documentation/manual.pdf dist/dvdisaster.pdf
+# The upstream manual PDF is not shipped: it documents the GUI and the
+# RS01/RS02 codecs, which this fork does not contain.
 
 echo "!> Building dist zip"
 if command -v zip >/dev/null; then

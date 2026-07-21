@@ -1,3 +1,22 @@
+dvdisaster Light changelog
+
+0.1.0 (2026-07-21)
+
+- first release of dvdisaster Light, a CLI-only fork of dvdisaster
+  0.79.10-pl6 reduced to the RS03 codec
+- removed: the RS01 and RS02 codecs, the GTK user interface, the
+  adaptive reading strategy
+- verifying an image that carries no RS03 data prints a plain-image
+  report instead of an error
+- the default method is RS03; ./configure builds the CLI by default
+- the RS03 output is verified bit-identical to dvdisaster 0.79.10-pl6,
+  and the inherited regression suite runs on every change
+- Windows packages are audited automatically so they keep running on
+  Windows 7 SP1 and newer
+
+The unchanged changelog of the dvdisaster base follows.
+========================================================
+
 #  dvdisaster changelog -*-text-*-
 #  dvdisaster: Additional error correction for optical media.
 #  Copyright (C) 2004-2017 Carsten Gnoerlich.

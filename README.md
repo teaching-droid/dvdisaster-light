@@ -1,5 +1,7 @@
 # dvdisaster Light
 
+**English** | [Deutsch](README.de.md) | [日本語](README.ja.md) | [Italiano](README.it.md)
+
 **dvdisaster Light** is a stripped-down, CLI-only fork of [dvdisaster](https://dvdisaster.jcea.es) focused on one thing: **RS03 error correction for optical media, as fast as the hardware allows**.
 
 dvdisaster protects a disc image with Reed-Solomon parity. If the medium later degrades, the damage can be repaired as long as it is smaller than the parity you added. The protection works at the image level, so it survives even filesystem damage.
