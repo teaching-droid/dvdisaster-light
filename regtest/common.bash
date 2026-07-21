@@ -376,6 +376,11 @@ function run_regtest()
          grep -va "dvdisaster: No memory leaks found." $NEWLOG >$TMPLOG
          mv $TMPLOG $NEWLOG
 
+         # ignore OpenCL diagnostics: they depend on the machine's GPUs
+
+         grep -Eva '^\[OpenCL' $NEWLOG >$TMPLOG
+         mv $TMPLOG $NEWLOG
+
          # ignore log lines specified by user
 
          if test -n "$IGNORE_LOG_LINE"; then

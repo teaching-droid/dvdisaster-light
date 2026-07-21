@@ -120,6 +120,9 @@ typedef struct
    int lastProgress;
    int lastPercent;
    int cpuBound,ioBound;
+
+   CLEncoder *gpu;          /* OpenCL encoder; NULL = encode on the CPU */
+   int nThreads;            /* number of spawned encoder threads */
 } ecc_closure;
 
 static void ecc_cleanup(gpointer data)
@@ -141,8 +144,9 @@ static void ecc_cleanup(gpointer data)
 
       /* Wait for all worker to exit */
 
-      for(i=0; i<Closure->codecThreads; i++)
-      {  g_thread_join(ec->thread[i]);
+      for(i=0; i<ec->nThreads; i++)
+      {  if(ec->thread[i])
+	    g_thread_join(ec->thread[i]);
 	 fflush(stdout);
       }
    }
@@ -176,6 +180,7 @@ static void ecc_cleanup(gpointer data)
    }
    if(ec->eh) g_free(ec->eh);
    if(ec->eh_le) g_free(ec->eh_le);
+   if(ec->gpu) CLEncoderFree(ec->gpu);
    if(ec->rt) FreeReedSolomonTables(ec->rt);
    if(ec->gt) FreeGaloisTables(ec->gt);
    if(ec->paritybase) g_free(ec->paritybase);
@@ -1142,6 +1147,130 @@ static gpointer encoder_thread(ecc_closure *ec)
    }
 }
 
+/*
+ * The GPU driver thread. Replaces the whole CPU worker pool: it claims
+ * every column of a chunk at once, runs the CRC pass on the CPU (the
+ * CRC layer participates in the parity and must be final before the
+ * upload), lets the GPU compute all parity for the chunk, and then
+ * downloads the parity planes straight into the output slices. The
+ * locking protocol towards the IO thread is identical to the one in
+ * encoder_thread().
+ */
+
+static gpointer gpu_encoder_thread(ecc_closure *ec)
+{  int ndata  = ec->lay->ndata;
+   int percent;
+   guint64 layerSectors;
+   guint64 layer_offset;
+   int layer;
+
+   verbose("%s", "ENC: GPU encoder thread initialized.\n");
+
+   for(;;)
+   {
+      g_mutex_lock(ec->lock);
+      while(   ec->sectorsToEncode
+	    && !ec->abortImmediately
+	    && ec->nextBufferIndex >= ec->encoderLayerSectors)
+      {  verbose("%s", "ENC: GPU encoder waiting for work\n");
+	 g_cond_wait(ec->ioCond, ec->lock);
+      }
+
+      /* Termination criterion */
+
+      if(!ec->sectorsToEncode || ec->abortImmediately)
+      {  g_mutex_unlock(ec->lock);
+	 verbose("%s", "ENC: GPU encoder exiting\n");
+	 return NULL;
+      }
+
+      /* Claim the whole chunk */
+
+      layerSectors = ec->encoderLayerSectors;
+      ec->nextBufferIndex = layerSectors;
+      g_mutex_unlock(ec->lock);
+
+      verbose("ENC: GPU encoder got chunk %" PRId64 " (%" PRId64 " sectors)\n",
+	      ec->encoderChunk, layerSectors);
+
+      /* CRC pass over all columns of the chunk (same semantics as the
+	 per column loop in encoder_thread) */
+
+      for(layer_offset=0; layer_offset<layerSectors; layer_offset++)
+      {  for(layer=0; layer<ndata-1; layer++)
+	 {  unsigned char *data = ec->encoderData[layer] + 2048*layer_offset;
+
+	    /* The first ecc block CRC needs to be cached for wrap-around */
+
+	    if(!ec->encoderChunk && !layer_offset)
+	    {  ec->firstCrc[layer] = Crc32(data, 2048);
+	    }
+
+	    /* Chain back CRC sums from next sector into current one */
+
+	    if(ec->encoderChunk+layer_offset < ec->lay->sectorsPerLayer-1)
+	    {  ec->encoderCrc[512*layer_offset+layer] = Crc32(data+2048, 2048);
+	    }
+	    else /* wrap-around: fill in CRCs from first ecc block */
+	    {  ec->encoderCrc[512*layer_offset+layer] = ec->firstCrc[layer];
+	    }
+	 }
+
+	 prepare_crc_block(ec, (CrcBlock*)&ec->encoderCrc[512*layer_offset]);
+      }
+
+      /* Upload the layers and compute the parity on the device */
+
+      if(!CLEncoderEncode(ec->gpu, ec->encoderData, 2048*layerSectors))
+      {  ec->abortImmediately = TRUE;
+	 Stop(_("GPU encoding failed; see --verbose output. "
+		"Re-run with --encoding-device cpu."));
+	 return NULL;
+      }
+
+      /* Wait until the IO thread has flushed the previous slices,
+	 then download the parity planes into them */
+
+      g_mutex_lock(ec->lock);
+      while(!ec->slicesFree && !ec->abortImmediately)
+      {  g_cond_wait(ec->ioCond, ec->lock);
+      }
+      g_mutex_unlock(ec->lock);
+
+      if(ec->abortImmediately)
+	 return NULL;
+
+      if(!CLEncoderDownload(ec->gpu, ec->slice, 2048*layerSectors))
+      {  ec->abortImmediately = TRUE;
+	 Stop(_("GPU parity download failed; see --verbose output. "
+		"Re-run with --encoding-device cpu."));
+	 return NULL;
+      }
+
+      /* Progress and completion bookkeeping */
+
+      g_mutex_lock(ec->lock);
+      ec->progress += layerSectors;
+      percent = (1000*ec->progress)/ec->lay->sectorsPerLayer;
+      if(ec->lastPercent != percent)
+      {  ec->lastPercent = percent;
+	 g_mutex_unlock(ec->lock);
+	 PrintProgress(_("Ecc generation: %3d.%1d%%"), percent/10, percent%10);
+      }
+      else g_mutex_unlock(ec->lock);
+
+      g_mutex_lock(ec->lock);
+      ec->sectorsToEncode -= ndata*layerSectors;
+      ec->buffersToEncode -= layerSectors;
+      if(!ec->buffersToEncode)
+      {  g_cond_broadcast(ec->ioCond);
+	 verbose("%s", "ENC: processed last buffer; telling IO process.\n");
+	 fflush(stdout);
+      }
+      g_mutex_unlock(ec->lock);
+   }
+}
+
 static void create_reed_solomon(ecc_closure *ec)
 {  int nroots = ec->lay->nroots;
    int ndata = ec->lay->ndata;
@@ -1217,14 +1346,40 @@ static void create_reed_solomon(ecc_closure *ec)
    ec->gt  = CreateGaloisTables(RS_GENERATOR_POLY);
    ec->rt  = CreateReedSolomonTables(ec->gt, RS_FIRST_ROOT, RS_PRIM_ELEM, nroots);
 
-   /*** Spawn the RS encoder threads */
+   /*** Try the GPU encoder when requested (or in auto mode, unless the
+	user explicitly picked a CPU encoding algorithm) */
+
+   ec->gpu = NULL;
+   if(   Closure->clDeviceMode == CL_DEVICE_MODE_GPU
+      || (   Closure->clDeviceMode == CL_DEVICE_MODE_AUTO
+	  && Closure->encodingAlgorithm == ENCODING_ALG_DEFAULT))
+   {  char reason[256];
+      int want = Closure->clDeviceMode == CL_DEVICE_MODE_GPU ? Closure->clDeviceIndex : -1;
+
+      ec->gpu = CLEncoderInit(ec->rt, ndata, (guint64)2048*ec->chunkSize,
+			      want, reason, sizeof(reason));
+      if(!ec->gpu)
+      {  if(Closure->clDeviceMode == CL_DEVICE_MODE_GPU)
+	    Stop(_("--encoding-device: %s"), reason);
+	 Verbose("[OpenCL: falling back to CPU encoding: %s]\n", reason);
+      }
+      else Verbose("[OpenCL: encoding on %s]\n", CLEncoderDeviceName(ec->gpu));
+   }
+
+   /*** Spawn the RS encoder threads (a single driver thread when the
+	GPU does the encoding) */
+
+   ec->nThreads = ec->gpu ? 1 : Closure->codecThreads;
 
    g_mutex_lock(ec->lock);  /* ec->thread[i] = ... may produce race condition */
-   for(i=0; i<Closure->codecThreads; i++) 
+   for(i=0; i<ec->nThreads; i++)
    {  GError *err = NULL;
 
       verbose("SCHED: creating encoder %d\n", i);
-      ec->thread[i] =  g_thread_try_new("encoder", (GThreadFunc)encoder_thread, (gpointer)ec, &err);
+      ec->thread[i] =  g_thread_try_new("encoder",
+					ec->gpu ? (GThreadFunc)gpu_encoder_thread
+					        : (GThreadFunc)encoder_thread,
+					(gpointer)ec, &err);
       if(!ec->thread[i])
       {  g_mutex_unlock(ec->lock);
 	 ec->abortImmediately = TRUE;
@@ -1235,12 +1390,12 @@ static void create_reed_solomon(ecc_closure *ec)
    g_thread_yield(); /* FIXME */
 
    /*** Now we actually become being the IO thread */
-   
+
    io_thread(ec);
 
    /*** Wait for workers to finish */
 
-   for(i=0; i<Closure->codecThreads; i++)
+   for(i=0; i<ec->nThreads; i++)
    {  g_thread_join(ec->thread[i]);
       verbose("SCHED: joined with worker %d\n", i);
       fflush(stdout);

@@ -310,6 +310,8 @@ typedef struct _GlobalClosure
    int useSSE2;         /* TRUE means to use SSE2 version of the codec. */
    int useAltiVec;      /* TRUE means to use AltiVec version of the codec. */
    int useAVX2;         /* TRUE means to use AVX2 version of the codec. */
+   int clDeviceMode;    /* CL_DEVICE_MODE_*: GPU usage for RS03 encoding */
+   int clDeviceIndex;   /* explicit GPU index for CL_DEVICE_MODE_GPU */
    int clSize;          /* Bytesize of cache line */
    int useSCSIDriver;   /* Whether to use generic or sg driver on Linux */
    int fixedSpeedValues;/* output fixed speed reading to make comparing debugging output easier */  
@@ -1493,6 +1495,24 @@ void DescribeRSEncoder(char**, char**);
 int ProbeSSE2(void);
 int ProbeAltiVec(void);
 int ProbeAVX2(void);
+
+/***
+ *** cl-encoder.c
+ ***/
+
+#define CL_DEVICE_MODE_AUTO 0    /* use the strongest GPU, CPU when none */
+#define CL_DEVICE_MODE_CPU  1    /* never use a GPU */
+#define CL_DEVICE_MODE_GPU  2    /* use the explicitly selected GPU */
+
+typedef struct _CLEncoder CLEncoder;
+
+void CLListDevices(void);
+CLEncoder* CLEncoderInit(ReedSolomonTables*, int ndata, guint64 maxColumns,
+			 int deviceIndex, char *reason, int reasonLen);
+int CLEncoderEncode(CLEncoder*, unsigned char **layers, guint64 columns);
+int CLEncoderDownload(CLEncoder*, unsigned char **slices, guint64 columns);
+void CLEncoderFree(CLEncoder*);
+char* CLEncoderDeviceName(CLEncoder*);
 
 /***
  *** show-manual.c

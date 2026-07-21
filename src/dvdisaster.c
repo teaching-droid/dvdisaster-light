@@ -84,6 +84,7 @@ typedef enum
    MODIFIER_DRIVER,
    MODIFIER_EJECT,
    MODIFIER_ENCODING_ALGORITHM,
+   MODIFIER_ENCODING_DEVICE,
    MODIFIER_ENCODING_IO_STRATEGY,
    MODIFIER_BRUTEFORCE_RS03_SEARCH,
    MODIFIER_EXAMINE_RS03,
@@ -236,6 +237,7 @@ int main(int argc, char *argv[])
 	{"ecc-target", 1, 0, 'o'},
 	{"eject", 0, 0, MODIFIER_EJECT },
 	{"encoding-algorithm", 1, 0, MODIFIER_ENCODING_ALGORITHM },
+	{"encoding-device", 1, 0, MODIFIER_ENCODING_DEVICE },
 	{"encoding-io-strategy", 1, 0, MODIFIER_ENCODING_IO_STRATEGY },
 	{"erase", 1, 0, MODE_ERASE },
 	{"examine-rs03", 0, 0, MODIFIER_EXAMINE_RS03 },
@@ -467,6 +469,25 @@ int main(int argc, char *argv[])
 #endif
 	   if(Closure->encodingAlgorithm == ENCODING_ALG_INVALID)
 	     Stop(_("--encoding-algorithm: valid types are 32bit, 64bit"));
+	   break;
+	 case MODIFIER_ENCODING_DEVICE:
+	   if(!strcmp(optarg, "list"))
+	   {  CLListDevices();
+	      exit(EXIT_SUCCESS);
+	   }
+	   else if(!strcmp(optarg, "auto"))
+	     Closure->clDeviceMode = CL_DEVICE_MODE_AUTO;
+	   else if(!strcmp(optarg, "cpu"))
+	     Closure->clDeviceMode = CL_DEVICE_MODE_CPU;
+	   else if(!strcmp(optarg, "gpu"))
+	   {  Closure->clDeviceMode = CL_DEVICE_MODE_GPU;
+	     Closure->clDeviceIndex = 0;
+	   }
+	   else if(!strncmp(optarg, "gpu:", 4))
+	   {  Closure->clDeviceMode = CL_DEVICE_MODE_GPU;
+	     Closure->clDeviceIndex = atoi(optarg+4);
+	   }
+	   else Stop(_("--encoding-device: valid values are auto, cpu, gpu, gpu:<n>, list"));
 	   break;
 	 case MODIFIER_ENCODING_IO_STRATEGY:
 	   if(!strcmp(optarg, "readwrite"))
@@ -998,6 +1019,7 @@ int main(int argc, char *argv[])
       PrintCLI(_("  --bruteforce-rs03-search   - enable bruteforce linear scan for RS03 data (slow!)\n"));
       PrintCLI(_("  --eject                    - eject medium after successful read\n"));
       PrintCLI(_("  --encoding-algorithm x     - possible values: 32bit, 64bit, SSE2, AVX2, AltiVec\n"));
+      PrintCLI(_("  --encoding-device x        - RS03 encoding device: auto, cpu, gpu, gpu:<n>, list\n"));
       PrintCLI(_("  --encoding-io-strategy x   - possible values: readwrite, mmap\n"));
       PrintCLI(_("  --fill-unreadable n        - fill unreadable sectors with byte n\n"));
       PrintCLI(_("  --ignore-fatal-sense       - continue reading after potentially fatal error conditon\n"));
