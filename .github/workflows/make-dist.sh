@@ -25,6 +25,7 @@ echo "!> Appimage is <$archive>"
 
 # Upstream locale files are not shipped: they no longer match this fork's
 # strings (own translations will return once the fork's strings settle).
+mkdir -p dist
 
 # WINDOWS 32/64
 if [ "$os" != "linux64" ]; then
