@@ -10,12 +10,9 @@ jobs:
   mac:
     strategy:
       matrix:
-        ui: [cli, gui]
         arch: [x86_64, arm64]
         printf: [fmtdbg, normal]
         include:
-          - ui: cli
-            clionly: --with-gui=no
           - printf: fmtdbg
             debugprintf: --with-debug-printf-format
           - arch: x86_64
@@ -31,28 +28,15 @@ jobs:
       env:
         HOMEBREW_NO_INSTALL_CLEANUP: 1
       run: brew install flock gdk-pixbuf dylibbundler create-dmg # glib => already installed
-    - name: install prerequisites (GUI)
-      if: matrix.ui == 'gui'
-      env:
-        HOMEBREW_NO_INSTALL_CLEANUP: 1
-      run: brew install gtk+3 adwaita-icon-theme
     - name: configure
       run: |
           set +x
-          ./configure ${{ matrix.clionly }} ${{ matrix.debugprintf }} --with-werror
+          ./configure ${{ matrix.debugprintf }} --with-werror
     - name: make
       run: |
         cat Makefile.config
         make -j$(sysctl -n hw.ncpu || echo 2)
-    - name: check executability
-      run: ./dvdisaster --version
-    - name: check executable (GUI)
-      if: matrix.ui == 'gui'
-      run: |
-          ./dvdisaster --version
-          if ./dvdisaster --version | grep NOGUI; then exit 1; fi
-    - name: check executable (CLI)
-      if: matrix.ui == 'cli'
+    - name: check executable
       run: |
           ./dvdisaster --version
           ./dvdisaster --version | grep NOGUI
@@ -67,15 +51,13 @@ jobs:
         mkdir -p /var/tmp/regtest
         echo "Number of available processors: $(sysctl -n hw.ncpu || echo U)"
         ./regtest/runtests.sh
+
   win:
     runs-on: windows-latest
     strategy:
       matrix:
-        ui: [cli, gui]
         printf: [fmtdbg, normal]
         include:
-          - ui: cli
-            clionly: --with-gui=no
           - printf: fmtdbg
             debugprintf: --with-debug-printf-format
     defaults:
@@ -87,9 +69,6 @@ jobs:
         msystem: MINGW64
         update: false
         install: git diffutils make pkg-config mingw-w64-x86_64-glib2 mingw-w64-x86_64-gcc mingw-w64-x86_64-ntldd-git man zip
-    - name: install GUI prereqs
-      if: matrix.ui == 'gui'
-      run: pacman -S --noconfirm mingw-w64-x86_64-gtk3 mingw-w64-x86_64-librsvg
     - name: git config
       run: git config --global core.autocrlf input
       shell: bash
@@ -97,9 +76,7 @@ jobs:
       with:
         persist-credentials: false
     - name: configure
-      run: |
-          echo running ./configure ${{ matrix.clionly }} ${{ matrix.debugprintf }} --with-werror
-          ./configure ${{ matrix.clionly }} ${{ matrix.debugprintf }}    --with-werror
+      run: ./configure ${{ matrix.debugprintf }} --with-werror
     - name: make
       run: nproc && make -j$(nproc)
     - name: check executable
@@ -109,15 +86,6 @@ jobs:
           if ./dvdisaster.exe --version | grep dirty; then exit 1; fi
           file dvdisaster.exe | grep -q 'x86-64'
           file dvdisaster.exe | grep -q 'for MS Windows'
-    - name: check executable (GUI)
-      if: matrix.ui == 'gui'
-      run: |
-          ./dvdisaster.exe --version
-          if ./dvdisaster.exe --version | grep NOGUI; then exit 1; fi
-    - name: check executable (CLI)
-      if: matrix.ui == 'cli'
-      run: |
-          ./dvdisaster.exe --version
           ./dvdisaster.exe --version | grep NOGUI
     - name: try to prepare dist
       run: ./.github/workflows/make-dist.sh ${{ github.ref }}
@@ -135,11 +103,8 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        ui: [cli, gui]
         printf: [fmtdbg, normal]
         include:
-          - ui: cli
-            clionly: --with-gui=no
           - printf: fmtdbg
             debugprintf: --with-debug-printf-format
     steps:
@@ -150,26 +115,11 @@ jobs:
       env:
         DEBIAN_FRONTEND: noninteractive
       run: sudo apt-get update && sudo apt-get install -y libglib2.0-dev man jq
-    - name: install prerequisites (GUI)
-      if: matrix.ui == 'gui'
-      env:
-        DEBIAN_FRONTEND: noninteractive
-      run: sudo apt-get install -y libgtk-3-dev
     - name: configure
-      run: |
-          echo ./configure ${{ matrix.clionly }} ${{ matrix.debugprintf }} --with-werror
-          ./configure ${{ matrix.clionly }} ${{ matrix.debugprintf }} --with-werror
+      run: ./configure ${{ matrix.debugprintf }} --with-werror
     - name: make
       run: nproc && make -j$(nproc)
-    - name: check executability
-      run: ./dvdisaster --version
-    - name: check executable (GUI)
-      if: matrix.ui == 'gui'
-      run: |
-          ./dvdisaster --version
-          if ./dvdisaster --version | grep NOGUI; then exit 1; fi
-    - name: check executable (CLI)
-      if: matrix.ui == 'cli'
+    - name: check executable
       run: |
           ./dvdisaster --version
           ./dvdisaster --version | grep NOGUI

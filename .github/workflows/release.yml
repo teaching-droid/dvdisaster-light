@@ -1,12 +1,14 @@
-name: autobuild
+name: build
 
 on:
   push:
     branches:
       - 'master'
-      - 'dev'
     tags:
       - 'v*'
+
+permissions:
+  contents: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -16,11 +18,8 @@ jobs:
   mac:
     strategy:
       matrix:
-        ui: [cli, gui]
         arch: [x86_64, arm64]
         include:
-          - ui: cli
-            clionly: --with-gui=no
           - arch: x86_64
             runs-on: macos-15-intel
           - arch: arm64
@@ -32,28 +31,15 @@ jobs:
         env:
           HOMEBREW_NO_INSTALL_CLEANUP: 1
         run: brew install flock gdk-pixbuf dylibbundler create-dmg # glib => already installed
-      - name: install prerequisites (GUI)
-        if: matrix.ui == 'gui'
-        env:
-          HOMEBREW_NO_INSTALL_CLEANUP: 1
-        run: brew install gtk+3 adwaita-icon-theme
       - name: configure
         run: |
           set +x
-          ./configure ${{ matrix.clionly }} --with-werror
+          ./configure --with-werror
       - name: make
         run: |
           cat Makefile.config
           make -j$(sysctl -n hw.ncpu || echo 2)
-      - name: check executability
-        run: ./dvdisaster --version
-      - name: check executable (GUI)
-        if: matrix.ui == 'gui'
-        run: |
-          ./dvdisaster --version
-          if ./dvdisaster --version | grep NOGUI; then exit 1; fi
-      - name: check executable (CLI)
-        if: matrix.ui == 'cli'
+      - name: check executable
         run: |
           ./dvdisaster --version
           ./dvdisaster --version | grep NOGUI
@@ -61,49 +47,11 @@ jobs:
         run: ./.github/workflows/make-mac-app.sh ${{ github.ref }} ${{ matrix.arch }}
         id: dist
         timeout-minutes: 4
-      - name: launch the app
-        run: |
-          set -x
-          hdiutil attach ${{ steps.dist.outputs.archive }}
-          cd /Volumes/dvdisaster*/dvdisaster.app
-          open ./Contents/MacOS/dvdisaster
-      - name: screenshot the desktop
-        run: |
-          screencapture -T 15 -x screenshot.png
-      - name: upload screenshot
+      - name: upload artifact
         uses: actions/upload-artifact@v7
         with:
-          name: macos-${{ matrix.arch }}-${{ matrix.ui }}.zip
-          path: screenshot.png
-      - name: Tag for Continuous Build
-        if: github.ref_name == 'master'
-        run: |
-          git tag -f latest
-          git push -f origin latest
-      - name: Upload to Continuous Build
-        if: github.ref_name == 'master'
-        uses: softprops/action-gh-release@v2
-        with:
-          token: "${{ secrets.GITHUB_TOKEN }}"
-          prerelease: true
-          name: "Continuous Build"
-          tag_name: latest
-          files: ${{ steps.dist.outputs.archive }}
-      - name: Tag for Dev Build
-        if: github.ref_name == 'dev'
-        run: |
-          git tag -f devel
-          git push -f origin devel
-      - name: Upload to Dev Build
-        if: github.ref_name == 'dev'
-        uses: softprops/action-gh-release@v2
-        with:
-          token: "${{ secrets.GITHUB_TOKEN }}"
-          prerelease: true
-          draft: true
-          name: "Dev Build"
-          tag_name: devel
-          files: ${{ steps.dist.outputs.archive }}
+          name: macos-${{ matrix.arch }}
+          path: ${{ steps.dist.outputs.archive }}
       - name: Upload to Draft Release
         if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@v2
@@ -116,12 +64,6 @@ jobs:
 
   win:
     runs-on: windows-latest
-    strategy:
-      matrix:
-        ui: [cli, gui]
-        include:
-          - ui: cli
-            clionly: --with-gui=no
     defaults:
       run:
         shell: msys2 {0}
@@ -131,15 +73,12 @@ jobs:
           msystem: MINGW64
           update: false
           install: git diffutils make pkg-config mingw-w64-x86_64-glib2 mingw-w64-x86_64-gcc mingw-w64-x86_64-ntldd-git man zip
-      - name: install GUI prereqs
-        if: matrix.ui == 'gui'
-        run: pacman -S --noconfirm mingw-w64-x86_64-gtk3 mingw-w64-x86_64-librsvg
       - name: git config
         run: git config --global core.autocrlf input
         shell: bash
       - uses: actions/checkout@v5
       - name: configure
-        run: ./configure ${{ matrix.clionly }}
+        run: ./configure
       - name: make
         run: nproc && make -j$(nproc)
       - name: check executable
@@ -149,12 +88,7 @@ jobs:
           if ./dvdisaster.exe --version | grep dirty; then exit 1; fi
           file dvdisaster.exe | grep -q 'x86-64'
           file dvdisaster.exe | grep -q 'for MS Windows'
-      - name: check executable (GUI)
-        if: matrix.ui == 'gui'
-        run: if ./dvdisaster.exe --version | grep NOGUI; then exit 1; fi
-      - name: check executable (CLI)
-        if: matrix.ui == 'cli'
-        run: ./dvdisaster.exe --version | grep NOGUI
+          ./dvdisaster.exe --version | grep NOGUI
       - name: prepare dist
         run: ./.github/workflows/make-dist.sh ${{ github.ref }}
         id: dist
@@ -163,35 +97,26 @@ jobs:
         run: |
           cd dist
           dvdisaster.exe --version
-      - name: Tag for Continuous Build
-        if: github.ref_name == 'master'
+      - name: audit dist for Windows 7 compatibility
         run: |
-          git tag -f latest
-          git push -f origin latest
-      - name: Upload to Continuous Build
-        if: github.ref_name == 'master'
-        uses: softprops/action-gh-release@v2
+          fail=0
+          for f in dist/*.exe dist/*.dll; do
+            objdump -p "$f" > /tmp/imports.txt
+            if grep -qiE 'DLL Name: api-ms-win-' /tmp/imports.txt; then
+              echo "FAIL: api set import in $f (not present on Windows 7)"
+              fail=1
+            fi
+            if grep -qE 'GetSystemTimePreciseAsFileTime|CreateFile2|CopyFile2|WaitOnAddress|SetThreadDescription|PathCch|GetOverlappedResultEx|VirtualAlloc2|PrefetchVirtualMemory' /tmp/imports.txt; then
+              echo "FAIL: post Windows 7 API import in $f"
+              fail=1
+            fi
+          done
+          test $fail -eq 0 && echo "Windows 7 import audit passed"
+      - name: upload artifact
+        uses: actions/upload-artifact@v7
         with:
-          token: "${{ secrets.GITHUB_TOKEN }}"
-          prerelease: true
-          name: "Continuous Build"
-          tag_name: latest
-          files: ${{ steps.dist.outputs.archive }}
-      - name: Tag for Dev Build
-        if: github.ref_name == 'dev'
-        run: |
-          git tag -f devel
-          git push -f origin devel
-      - name: Upload to Dev Build
-        if: github.ref_name == 'dev'
-        uses: softprops/action-gh-release@v2
-        with:
-          token: "${{ secrets.GITHUB_TOKEN }}"
-          prerelease: true
-          draft: true
-          name: "Dev Build"
-          tag_name: devel
-          files: ${{ steps.dist.outputs.archive }}
+          name: windows-x64
+          path: ${{ steps.dist.outputs.archive }}
       - name: Upload to Draft Release
         if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@v2
@@ -202,150 +127,28 @@ jobs:
           tag_name: ${{ github.ref_name }}
           files: ${{ steps.dist.outputs.archive }}
 
-  linux64-cli:
+  linux64:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
       - name: install prerequisites
         run: sudo apt update && sudo apt install -y libglib2.0-dev man
       - name: configure
-        run: ./configure --with-gui=no
+        run: ./configure
       - name: make
         run: nproc && make -j$(nproc) && make static && mv -f dvdisaster-static dvdisaster
       - name: check executable
         run: |
           ./dvdisaster --version && ./dvdisaster --version | grep -q dirty || true
           file dvdisaster && file dvdisaster | grep -q 'ELF 64' && file dvdisaster | grep -q 'statically linked'
-
       - name: build dist
         run: ./.github/workflows/make-dist.sh ${{ github.ref }}
         id: dist
-      - name: Tag for Continuous Build
-        if: github.ref_name == 'master'
-        run: |
-          git tag -f latest
-          git push -f origin latest
-      - name: Upload to Continuous Build
-        if: github.ref_name == 'master'
-        uses: softprops/action-gh-release@v2
+      - name: upload artifact
+        uses: actions/upload-artifact@v7
         with:
-          token: "${{ secrets.GITHUB_TOKEN }}"
-          prerelease: true
-          name: "Continuous Build"
-          tag_name: latest
-          files: ${{ steps.dist.outputs.archive }}
-      - name: Tag for Dev Build
-        if: github.ref_name == 'dev'
-        run: |
-          git tag -f devel
-          git push -f origin devel
-      - name: Upload to Dev Build
-        if: github.ref_name == 'dev'
-        uses: softprops/action-gh-release@v2
-        with:
-          token: "${{ secrets.GITHUB_TOKEN }}"
-          prerelease: true
-          draft: true
-          name: "Dev Build"
-          tag_name: devel
-          files: ${{ steps.dist.outputs.archive }}
-      - name: Upload to Draft Release
-        if: github.ref_type == 'tag'
-        uses: softprops/action-gh-release@v2
-        with:
-          token: "${{ secrets.GITHUB_TOKEN }}"
-          draft: true
-          name: ${{ github.ref_name }}
-          tag_name: ${{ github.ref_name }}
-          files: ${{ steps.dist.outputs.archive }}
-
-  linux64-appimage:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-      - name: install prerequisites on host
-        run: sudo apt-get update && sudo apt-get install -y fuse
-      - name: docker
-        run: |
-          mkdir -p /tmp/dist
-          docker run --device /dev/fuse --privileged --name uu -d -v $PWD:/dvdisaster -v /tmp/dist:/dist ubuntu:18.04 sleep 1800
-      - name: install prerequisites in docker
-        run: docker exec uu sh -c 'apt update && apt install -y man fuse file make gcc pkg-config libglib2.0-dev libgtk-3-dev glib-networking libgdk-pixbuf2.0-dev'
-      - name: configure in docker
-        run: docker exec uu sh -c 'cd /dvdisaster && ./configure --prefix=/usr'
-      - name: make in docker
-        run: docker exec uu sh -c 'make -C /dvdisaster -j$(nproc) && make -C /dvdisaster'
-      - name: make install in docker
-        run: docker exec uu sh -c 'cd /dvdisaster && touch documentation/user-manual/manual.pdf && make install DESTDIR=/dist'
-      - name: copy gtk3 and gio stuff to dist in docker
-        run: |
-          set -euo pipefail
-          docker exec uu sh -c 'install -d /dist/usr/lib/gtk-3.0 && cp -va $(pkg-config --variable=libdir gtk+-3.0)/gtk-3.0/* /dist/usr/lib/gtk-3.0'
-          docker exec uu sh -c 'install -d /dist/usr/lib/gio/modules && cp -va $(dirname $(dpkg -L glib-networking | grep -F /libgiolibproxy.so | head -n1))/* /dist/usr/lib/gio/modules/'
-          docker exec uu sh -c 'gio-querymodules /dist/usr/lib/gio/modules'
-          docker exec uu sh -c 'install -d /dist/usr/lib/gdk-pixbuf2 && timeout 10 cp -va $(dirname $(find /usr/lib -name "libpixbufloader-*.so" | head -n1))/../* /dist/usr/lib/gdk-pixbuf2/'
-          docker exec uu sh -c 'gdk-pixbuf-query-loaders > /dist/usr/lib/gdk-pixbuf2/loaders.cache'
-          IM_BASEPATH=$(dirname $(cd /tmp/dist; find . -name immodules.cache))/immodules
-          sudo sed -i -re 's=^"/.+/immodules/(.+)="'$IM_BASEPATH'/\1=' $(find /tmp/dist/ -name immodules.cache)
-          PIX_BASEPATH=$(dirname $(cd /tmp/dist; find . -name loaders.cache))/
-          sudo sed -i -re 's=^"/.+/loaders/(.+)="'$PIX_BASEPATH'/loaders/\1=' $(find /tmp/dist/ -name loaders.cache)
-      - name: build appimage in docker with linuxdeploy
-        run: |
-          wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
-          chmod 755 linuxdeploy-x86_64.AppImage
-          docker exec -e LINUXDEPLOY_OUTPUT_VERSION=$(echo "${{ github.ref }}" | grep -Eo '[^/]+$') -e ARCH=x86_64 uu sh -c 'cd /dvdisaster && ./linuxdeploy-x86_64.AppImage -d contrib/dvdisaster.desktop -i contrib/dvdisaster64.png -i contrib/dvdisaster48.png -i contrib/dvdisaster32.png -i contrib/dvdisaster16.png --icon-filename dvdisaster --custom-apprun=contrib/AppRun.sh --appdir /dist/ --output appimage'
-      - name: fix perms
-        run: docker exec uu sh -c "chown -R $UID /dist /dvdisaster/*.AppImage"
-      - name: patch libgio and apply glib workaround by repackaging with appimagetool
-        env:
-          ARCH: x86_64
-        run: |
-          wget -q https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
-          chmod 755 appimagetool-x86_64.AppImage
-          exe=$(ls -1 dvdisaster*.AppImage)
-          chmod 755 $exe
-          ./$exe --appimage-extract
-          rm -vf $exe
-          sed -i -re "s=gio/modules=:::::::::::=g" squashfs-root/usr/lib/libgio*.so*
-          env LINUXDEPLOY_OUTPUT_VERSION=$(echo "${{ github.ref }}" | grep -Eo '[^/]+$') ./appimagetool-x86_64.AppImage -v squashfs-root
-          mv -v dvdisaster*AppImage $exe
-          chmod 755 $exe
-      - name: test appimage
-        id: dist
-        run: |
-          chmod 755 dvdisaster*.AppImage && ./dvdisaster*.AppImage --version
-          archive=$(ls -1 dvdisaster*.AppImage)
-          echo "archive=$archive" >> "$GITHUB_OUTPUT"
-          echo "appimage is <$archive>"
-      - name: Tag for Continuous Build
-        if: github.ref_name == 'master'
-        run: |
-          git tag -f latest
-          git push -f origin latest
-      - name: Upload to Continuous Build
-        if: github.ref_name == 'master'
-        uses: softprops/action-gh-release@v2
-        with:
-          token: "${{ secrets.GITHUB_TOKEN }}"
-          prerelease: true
-          name: "Continuous Build"
-          tag_name: latest
-          files: ${{ steps.dist.outputs.archive }}
-      - name: Tag for Dev Build
-        if: github.ref_name == 'dev'
-        run: |
-          git tag -f devel
-          git push -f origin devel
-      - name: Upload to Dev Build
-        if: github.ref_name == 'dev'
-        uses: softprops/action-gh-release@v2
-        with:
-          token: "${{ secrets.GITHUB_TOKEN }}"
-          prerelease: true
-          draft: true
-          name: "Dev Build"
-          tag_name: devel
-          files: ${{ steps.dist.outputs.archive }}
+          name: linux-x64
+          path: ${{ steps.dist.outputs.archive }}
       - name: Upload to Draft Release
         if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@v2
