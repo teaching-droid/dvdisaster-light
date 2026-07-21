@@ -197,6 +197,12 @@ typedef void PangoLayout;
 /* Maximum number of parallel encoder/decoder threads */
 
 #define MAX_CODEC_THREADS 1024           /* not including IO and GUI */
+/* dvdisaster Light release version. The underlying VERSION/PATCHLEVEL of the
+   dvdisaster base stays untouched: it feeds the on-disk creatorVersion fields,
+   which must keep matching what original dvdisaster writes and expects. */
+
+#define LIGHT_VERSION "0.1.0"
+
 #define MAX_OLD_CACHE_SIZE  8096         /* old cache for RS01/RS02  */
 #define MAX_PREFETCH_CACHE_SIZE (512*1024)   /* up to 0.5TB RS03  */
 

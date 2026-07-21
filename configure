@@ -72,11 +72,13 @@ GET_BUILDTMP
 
 PRINT_MESSAGE "\nDetermining build flavor:"
 
-WITH_OPTION gui yes "[yes | no]"
+WITH_OPTION gui no "[yes | no]"
 
-# Remove the useless CLI console under windows
-if [[ $(uname) =~ MINGW ]] && [ "$cfg_with_gui" == "yes" ]; then
-  CFG_LDFLAGS="$CFG_LDFLAGS -mwindows"
+if test "$cfg_with_gui" == "yes"; then
+  echo
+  echo "dvdisaster Light is a CLI only fork; the GTK GUI sources were removed."
+  echo "Configure without --with-gui. A graphical front end ships as a separate program."
+  exit 1
 fi
 
 # Look for required libraries

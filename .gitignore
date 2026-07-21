@@ -16,3 +16,5 @@ dvdisaster
 build.h
 dvdisaster.mo
 locale/messages.pot
+dvdisaster.exe
+build/

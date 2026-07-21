@@ -487,13 +487,13 @@ void InitClosure()
    /* Extract the version string */
 
 #if defined(HAVE_UNSTABLE_RELEASE) && defined(PATCHLEVEL)
-   Closure->cookedVersion = g_strdup_printf("%s (unofficial patchlevel %d)", VERSION, PATCHLEVEL);
+   Closure->cookedVersion = g_strdup_printf("Light " LIGHT_VERSION " (based on dvdisaster %s-pl%d)", VERSION, PATCHLEVEL);
    Closure->releaseFlags = MFLAG_DEVEL;
 #elif defined(HAVE_UNSTABLE_RELEASE)
-   Closure->cookedVersion = g_strdup_printf("%s (unstable)", VERSION);
+   Closure->cookedVersion = g_strdup_printf("Light " LIGHT_VERSION " (based on dvdisaster %s, unstable)", VERSION);
    Closure->releaseFlags = MFLAG_DEVEL;
 #else
-   Closure->cookedVersion = g_strdup(VERSION);
+   Closure->cookedVersion = g_strdup_printf("Light " LIGHT_VERSION " (based on dvdisaster %s)", VERSION);
 #endif
 
    /* Generate a more comprehensive version string */
