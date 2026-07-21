@@ -5,13 +5,9 @@ set -x
 github_ref="$1"
 arch="${2:-$(uname -m)}"
 
-if ./dvdisaster --version | grep -q NOGUI; then
-  suffix="-cli-only"
-  GUI=0
-else
-  suffix=""
-  GUI=1
-fi
+# This fork is always CLI only; the asset naming keeps the suffix.
+suffix="-cli-only"
+GUI=0
 
 archive="dvdisaster-$(echo "$github_ref" | grep -Eo '[^/]+$')-macos-$arch$suffix.dmg"
 [ -n "$GITHUB_OUTPUT" ] && echo "archive=$archive" >> "$GITHUB_OUTPUT"

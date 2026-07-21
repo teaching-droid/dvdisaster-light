@@ -509,7 +509,7 @@ void InitClosure()
   #define BITNESS_STRING ""
 #endif
 
-   Closure->versionString = g_strdup_printf("dvdisaster %s build %s, %s%s",
+   Closure->versionString = g_strdup_printf("dvdisaster %s [%s, %s%s]",
 					    Closure->cookedVersion, buildCount, SYS_NAME, BITNESS_STRING);
 
    /* Replace the dot with a locale-resistant separator */

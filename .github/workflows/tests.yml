@@ -39,7 +39,7 @@ jobs:
     - name: check executable
       run: |
           ./dvdisaster --version
-          ./dvdisaster --version | grep NOGUI
+          ./dvdisaster --version | grep "dvdisaster Light"
     - name: prepare dist
       run: ./.github/workflows/make-mac-app.sh ${{ github.ref }} ${{ matrix.arch }}
     - name: regression tests
@@ -86,7 +86,7 @@ jobs:
           if ./dvdisaster.exe --version | grep dirty; then exit 1; fi
           file dvdisaster.exe | grep -q 'x86-64'
           file dvdisaster.exe | grep -q 'for MS Windows'
-          ./dvdisaster.exe --version | grep NOGUI
+          ./dvdisaster.exe --version | grep "dvdisaster Light"
     - name: try to prepare dist
       run: ./.github/workflows/make-dist.sh ${{ github.ref }}
     - name: run regression tests
@@ -122,7 +122,7 @@ jobs:
     - name: check executable
       run: |
           ./dvdisaster --version
-          ./dvdisaster --version | grep NOGUI
+          ./dvdisaster --version | grep "dvdisaster Light"
     - name: prepare dist
       run: ./.github/workflows/make-dist.sh ${{ github.ref }}
     - name: regression tests

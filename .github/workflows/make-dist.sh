@@ -11,13 +11,9 @@ esac
 
 ./dvdisaster$exe --version
 
-if ./dvdisaster$exe --version | grep -q NOGUI; then
-    GUI=0
-    suffix=$suf-cli-only
-else
-    GUI=1
-    suffix=$suf
-fi
+# This fork is always CLI only; the asset naming keeps the suffix.
+GUI=0
+suffix=$suf-cli-only
 
 archive=dvdisaster-$(echo "$github_ref" | grep -Eo '[^/]+$')-$suffix.zip
 [ -n "$GITHUB_OUTPUT" ] && echo "archive=$archive" >> "$GITHUB_OUTPUT"
