@@ -73,8 +73,7 @@ typedef enum
 
    /* don't use the ascii range 32-127 so that we
       avoid collision with the single-char options */
-   MODIFIER_ADAPTIVE_READ = 128,
-   MODIFIER_AUTO_SUFFIX,
+   MODIFIER_AUTO_SUFFIX = 128,
    MODIFIER_CACHE_SIZE, 
    MODIFIER_CLV_SPEED,    /* unused */ 
    MODIFIER_CAV_SPEED,    /* unused */
@@ -87,7 +86,6 @@ typedef enum
    MODIFIER_ENCODING_ALGORITHM,
    MODIFIER_ENCODING_IO_STRATEGY,
    MODIFIER_BRUTEFORCE_RS03_SEARCH,
-   MODIFIER_EXAMINE_RS02,
    MODIFIER_EXAMINE_RS03,
    MODIFIER_FILL_UNREADABLE,
    MODIFIER_FIXED_SPEED_VALUES,
@@ -216,8 +214,7 @@ int main(int argc, char *argv[])
    for(;;)
    {  int option_index,c;
       static struct option long_options[] =
-      { {"adaptive-read", 0, 0, MODIFIER_ADAPTIVE_READ},
-	{"auto-suffix", 0, 0,  MODIFIER_AUTO_SUFFIX},
+      { {"auto-suffix", 0, 0,  MODIFIER_AUTO_SUFFIX},
 	{"assume", 1, 0, 'a'},
 	{"byteset", 1, 0, MODE_BYTESET },
 	{"copy-sector", 1, 0, MODE_COPY_SECTOR },
@@ -240,7 +237,6 @@ int main(int argc, char *argv[])
 	{"encoding-algorithm", 1, 0, MODIFIER_ENCODING_ALGORITHM },
 	{"encoding-io-strategy", 1, 0, MODIFIER_ENCODING_IO_STRATEGY },
 	{"erase", 1, 0, MODE_ERASE },
-	{"examine-rs02", 0, 0, MODIFIER_EXAMINE_RS02 },
 	{"examine-rs03", 0, 0, MODIFIER_EXAMINE_RS03 },
 	{"fill-unreadable", 1, 0, MODIFIER_FILL_UNREADABLE },
 	{"fix", 0, 0, 'f'},
@@ -304,9 +300,7 @@ int main(int argc, char *argv[])
 
       switch(c)
       {            
-	 case 'a': if(strstr(optarg, "rs02") || strstr(optarg, "RS02"))
-		      Closure->examineRS02 = TRUE; 
-	           if(strstr(optarg, "rs03") || strstr(optarg, "RS03"))
+	 case 'a': if(strstr(optarg, "rs03") || strstr(optarg, "RS03"))
 		      Closure->examineRS03 = TRUE; 
 		   break;	       
          case 'c': mode = MODE_SEQUENCE; sequence |= 1<<MODE_CREATE; break;
@@ -410,9 +404,6 @@ int main(int argc, char *argv[])
 
          case  0 : break; /* flag argument */
 
-         case MODIFIER_ADAPTIVE_READ:
-	   Closure->adaptiveRead = TRUE;
-	   break;
          case MODIFIER_AUTO_SUFFIX:
 	   Closure->autoSuffix = TRUE;
 	   break;
@@ -492,9 +483,6 @@ int main(int argc, char *argv[])
 	   break;
          case MODIFIER_BRUTEFORCE_RS03_SEARCH:
            Closure->bruteforceRS03Search = TRUE;
-           break;
-         case MODIFIER_EXAMINE_RS02:
-           Closure->examineRS02 = TRUE;
            break;
          case MODIFIER_EXAMINE_RS03:
            Closure->examineRS03 = TRUE;
@@ -805,9 +793,7 @@ int main(int argc, char *argv[])
 	if(sequence & 1<<MODE_READ)
 	{  if(sequence & 1<<MODE_CREATE) 
 	      Closure->readAndCreate = TRUE;
-	   if(Closure->adaptiveRead) 
-	        ReadMediumAdaptive((gpointer)0);
-	   else ReadMediumLinear((gpointer)0);
+	   ReadMediumLinear((gpointer)0);
 	}
 
 	if(sequence & 1<<MODE_CREATE)
@@ -858,8 +844,8 @@ int main(int argc, char *argv[])
 
 	   if(image && image->eccFileMethod) method = image->eccFileMethod;
 	   else if(image && image->eccMethod) method = image->eccMethod;
-	   else if(!(method = FindMethod("RS01")))
-	           Stop(_("RS01 method not available for comparing files."));
+	   else if(!(method = FindMethod("RS03")))
+	           Stop(_("RS03 method not available for comparing files."));
 	     
 	   method->verify(image);
 	}
@@ -978,18 +964,17 @@ int main(int argc, char *argv[])
       PrintCLI("\n");
 
       PrintCLI(_("Tweaking options (see manual before using!)\n"));
-      PrintCLI(_("  -a, --assume x             - assume image is augmented with given codec (RS02 or RS03)\n"));
+      PrintCLI(_("  -a, --assume x             - assume image is augmented with given codec (RS03)\n"));
       PrintCLI(_("  -j, --jump n               - jump n sectors forward after a read error (default: 16)\n"));
-      PrintCLI(_("  -m, --method x             - list/select error correction methods (default: RS01)\n"));
+      PrintCLI(_("  -m, --method x             - list/select error correction methods (default: RS03)\n"));
       PrintCLI(_("  -n, --redundancy x         - error correction data redundancy\n"
 		 "                               e.g. 20%%, 32r (roots), 200m (MiB), normal, high\n"
-		 "                               for RS02/RS03 augmented images, also accepts a medium size:\n"
+		 "                               for RS03 augmented images, also accepts a medium size:\n"
 		 "                               CD, DVD, DVD9, BD, BD2, BDXL3, BDXL4,\n"
 		 "                               BDNODM, BD2NODM, BDXL3NODM, BDXL4NODM,\n"
 		 "                               or a raw sector count\n"));
       PrintCLI(_("  -v, --verbose              - more logs, set env VERBOSE=1 for pre-options parsing logs\n"));
       PrintCLI(_("  -x, --threads n            - use n threads for en-/decoding (if supported by codec)\n"));
-      PrintCLI(_("  --adaptive-read            - use optimized strategy for reading damaged media\n"));
       PrintCLI(_("  --auto-suffix              - automatically add .iso and .ecc file suffixes\n"));
       PrintCLI(_("  --cache-size n             - image cache size in MiB during -c mode (default: 32MiB)\n"));
       PrintCLI(_("  --dao                      - assume DAO disc; do not trim image end\n"));
@@ -1031,7 +1016,6 @@ int main(int argc, char *argv[])
 	PrintCLI(_("  --copy-sector a,n,b,m    - copy sector n from image a to sector m in image b\n"));
 	PrintCLI(_("  --erase sector           - erase the given sector\n"));
 	PrintCLI(_("  --erase n-m              - erase sectors n - m, inclusively\n"));
-	PrintCLI(_("  --examine-rs02           - force RS02 exhaustive search\n"));
 	PrintCLI(_("  --examine-rs03           - force RS03 exhaustive search\n"));
 	PrintCLI(_("  --fixed-speed-values     - output fixed speed values for better output diffing\n"));
 	PrintCLI(_("  --ignore-rs03-header     - ignore RS03 header when repairing (forcing a full search)\n"));

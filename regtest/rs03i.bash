@@ -227,26 +227,6 @@ if try "image crafted to have no padding" no_padding; then (
   run_regtest no_padding "-t" $TMPISO $NO_FILE
 ) & limit_jobs; fi
 
-# Augmented image is protected by an outer RS01 error correction file
-
-if try "with RS01 error correction file" with_rs01_file; then (
-    $NEWVER --regtest --debug --set-version $SETVERSION -i$MASTERISO -e$TMPECC -c -n normal >>$LOGFILE 2>&1
-
-    run_regtest with_rs01_file "-v -t" $MASTERISO $TMPECC
-) & limit_jobs; fi
-
-# Augmented image and non-matching RS01 error correction file
-# Expected behaviour is to report the non-matching ecc file
-# rather than falling back to using the RS03 part since the
-# user did probably have some intention specifying the ecc file.
-
-if try "with non-matching RS01 error correction file" with_wrong_rs01_file; then (
-    $NEWVER --regtest --debug --set-version $SETVERSION -i$MASTERISO -e$TMPECC -c -n normal >>$LOGFILE 2>&1
-    $NEWVER --debug -i$TMPECC --byteset 0,24,1 >>$LOGFILE 2>&1
-
-    run_regtest with_wrong_rs01_file "-v -t" $MASTERISO $TMPECC
-) & limit_jobs; fi
-
 # Augmented image is protected by an outer RS03 error correction file
 
 if try "with RS03 error correction file" with_rs03_file; then (
@@ -767,19 +747,6 @@ if try "ecc creating from RS03-augmented image" ecc_from_rs03; then (
    run_regtest ecc_from_rs03 "-mRS03 -n$ECCSIZE -c" $TMPISO $NO_FILE
 ) & limit_jobs; fi
 
-# Create with already RS02-augmented image 
-
-if try "ecc creating from RS02-augmented image" ecc_from_rs02; then (
-   $NEWVER --debug -i$TMPISO --random-image $ISOSIZE >>$LOGFILE 2>&1
-   $NEWVER --regtest --debug --set-version $SETVERSION -i$TMPISO -mRS02 -n$((ECCSIZE+5000)) -c >>$LOGFILE 2>&1
-
-   IGNORE_LOG_LINE="^Avg performance|^Augmenting image with Method RS03"
-   replace_config method-name RS03
-   replace_config ecc-target 1
-   extra_args="--debug --set-version $SETVERSION"
-   run_regtest ecc_from_rs02 "-mRS03 -n$ECCSIZE -c" $TMPISO $NO_FILE
-) & limit_jobs; fi
-
 # Create with already RS03-augmented image having a larger redundancy 
 
 if try "ecc creating from RS03-augmented image w/ higher red." ecc_from_larger_rs03; then (
@@ -791,20 +758,6 @@ if try "ecc creating from RS03-augmented image w/ higher red." ecc_from_larger_r
    replace_config ecc-target 1
    extra_args="--debug --set-version $SETVERSION"
    run_regtest ecc_from_larger_rs03 "-mRS03 -n$ECCSIZE -c" $TMPISO $NO_FILE
-) & limit_jobs; fi
-
-# Create with already RS02-augmented image of a non-2048 multiple size
-
-if try "ecc creating from RS02-augmented image w/ non block size." ecc_from_rs02_non_blocksize; then (
-   $NEWVER --debug -i$TMPISO --random-image $ISOSIZE >>$LOGFILE 2>&1
-   for i in $(seq 56); do echo -n "1" >>$TMPISO; done
-   $NEWVER --regtest --debug --set-version $SETVERSION -i$TMPISO -mRS02 -n$ECCSIZE -c >>$LOGFILE 2>&1
-
-   IGNORE_LOG_LINE="^Avg performance|^Augmenting image with Method RS03"
-   replace_config method-name RS03
-   replace_config ecc-target 1
-   extra_args="--debug --set-version $SETVERSION"
-   run_regtest ecc_from_rs02_non_blocksize "-mRS03 -n$ECCSIZE -c -a RS03" $TMPISO $NO_FILE
 ) & limit_jobs; fi
 
 # Create with already RS03-augmented image of a non-2048 multiple size
@@ -919,36 +872,6 @@ if try "create ecc after completing partial image" ecc_create_after_partial_read
   replace_config ecc-target 1
   extra_args="--debug --set-version $SETVERSION --sim-cd=$SIMISO  --fixed-speed-values"
   run_regtest ecc_create_after_partial_read "-r -mRS03 -c -n$ECCSIZE -v --spinup-delay=0" $TMPISO $TMPECC
-) & limit_jobs; fi
-
-# Read image with ecc file and create new (other) ecc in the same program call.
-# Tests whether CRC and ECC information is handed over correctly.
-
-if try "read image with ecc (RS01) and create new ecc" ecc_recreate_after_read_rs01; then (
-  $NEWVER --debug -i$SIMISO --random-image $ISOSIZE >>$LOGFILE 2>&1
-  $NEWVER --regtest --debug --set-version $SETVERSION -i$SIMISO -e $TMPECC -mRS01 -c -n 10r >>$LOGFILE 2>&1
-
-  IGNORE_LOG_LINE="^Avg performance|^Augmenting image with Method RS03"
-  replace_config method-name RS03
-  replace_config ecc-target 1
-  replace_config verbose 1
-  extra_args="--debug --set-version $SETVERSION --sim-cd=$SIMISO  --fixed-speed-values"
-  run_regtest ecc_recreate_after_read_rs01 "-r -mRS03 -c -n$ECCSIZE -v --spinup-delay=0" $TMPISO $TMPECC
-) & limit_jobs; fi
-
-# Read image with ecc file and create new (other) ecc in the same program call.
-# Tests whether CRC and ECC information is handed over correctly.
-
-if try "read image with ecc (RS02) and create new ecc" ecc_recreate_after_read_rs02; then (
-  $NEWVER --debug -i$SIMISO --random-image $ISOSIZE >>$LOGFILE 2>&1
-  $NEWVER --regtest --debug --set-version $SETVERSION -i$SIMISO -mRS02 -c -n24000 >>$LOGFILE 2>&1
-
-  IGNORE_LOG_LINE="^Avg performance|^Augmenting image with Method RS03"
-  replace_config method-name RS03
-  replace_config ecc-target 1
-  replace_config verbose 1
-  extra_args="--debug --set-version $SETVERSION --sim-cd=$SIMISO  --fixed-speed-values"
-  run_regtest ecc_recreate_after_read_rs02 "-r -mRS03 -c -n$ECCSIZE -v --spinup-delay=0" $TMPISO $TMPECC
 ) & limit_jobs; fi
 
 # Read image with ecc file and create new (other) ecc in the same program call.
@@ -1139,20 +1062,6 @@ if try "fixing ecc crafted to have no padding" fix_no_padding; then (
   $NEWVER --debug -i$TMPISO --erase 500-524 >>$LOGFILE 2>&1
   
   run_regtest fix_no_padding "-f" $TMPISO  $NO_FILE
-) & limit_jobs; fi
-
-# Augmented image is protected by an outer RS01 error correction file
-# Setting the byte creates a CRC error which can only be detected by
-# the outer RS01 code, so we use this as an additional probe that the
-# correct (outer) ECC is applied.
-
-if try "fixing RS03 with RS01 error correction file" fix_with_rs01_file; then (
-    $NEWVER --regtest --debug --set-version $SETVERSION -i$MASTERISO -e$TMPECC -c -n normal >>$LOGFILE 2>&1
-
-    cp $MASTERISO $TMPISO
-    $NEWVER --debug -i$TMPISO --byteset 24989,0,1 >>$LOGFILE 2>&1
-    
-    run_regtest fix_with_rs01_file "-f" $TMPISO $TMPECC
 ) & limit_jobs; fi
 
 # Augmented image is protected by an outer RS03 error correction file
@@ -1513,42 +1422,6 @@ if try "scanning image with bad ecc byte" scan_ecc_bad_byte; then (
 
    extra_args="--debug --sim-cd=$SIMISO --fixed-speed-values"
    run_regtest scan_ecc_bad_byte "--spinup-delay=0 -s " $TMPISO  $NO_FILE
-) & limit_jobs; fi
-
-# Augmented image is protected by an outer RS01 error correction file
-# Setting the byte creates a CRC error which can only be detected by
-# the outer RS01 code, so we use this as an additional probe that the
-# correct (outer) ECC is applied.
-
-if try "scanning with RS01 error correction file" scan_with_rs01_file; then (
-    $NEWVER --regtest --debug --set-version $SETVERSION -i$MASTERISO -e$TMPECC -c -n normal >>$LOGFILE 2>&1
-
-    cp $MASTERISO $SIMISO
-    $NEWVER --debug -i$SIMISO --byteset 24989,0,1 >>$LOGFILE 2>&1
-    
-    extra_args="--debug --sim-cd=$SIMISO --fixed-speed-values"
-    run_regtest scan_with_rs01_file "--spinup-delay=0 -s " $TMPISO $TMPECC
-) & limit_jobs; fi
-
-# Augmented image and non-matching RS01 error correction file
-# Currently the mismatch is (generally) not detected
-# NOTE: There seems to be an intermittent race condition between
-# printing the defective sector number and the reading progress.
-# Ignore for now and debug later.
-# Should we change this behaviour?
-# Expected behaviour for verify is to report the non-matching ecc file
-# rather than falling back to using the RS03 part since the
-# user did probably have some intentention specifying the ecc file.
-
-if try "scanning with non-matching RS01 error correction file" scan_with_wrong_rs01_file; then (
-    $NEWVER --regtest --debug --set-version $SETVERSION -i$MASTERISO -e$TMPECC -c -n normal >>$LOGFILE 2>&1
-    $NEWVER --debug -i$TMPECC --byteset 0,24,1 >>$LOGFILE 2>&1
-
-    cp $MASTERISO $SIMISO
-    $NEWVER --debug -i$SIMISO --byteset 24989,0,1 >>$LOGFILE 2>&1
-    
-    extra_args="--debug --sim-cd=$SIMISO --fixed-speed-values"
-    run_regtest scan_with_wrong_rs01_file "--spinup-delay=0 -s " $TMPISO $TMPECC
 ) & limit_jobs; fi
 
 # Augmented image is protected by an outer RS03 error correction file
@@ -2073,42 +1946,6 @@ if try "reading image with bad ecc byte" read_ecc_bad_byte; then (
    run_regtest read_ecc_bad_byte "--spinup-delay=0 -r " $TMPISO  $NO_FILE
 ) & limit_jobs; fi
 
-# Augmented image is protected by an outer RS01 error correction file
-# Setting the byte creates a CRC error which can only be detected by
-# the outer RS01 code, so we use this as an additional probe that the
-# correct (outer) ECC is applied.
-
-if try "reading with RS01 error correction file" read_with_rs01_file; then (
-    $NEWVER --regtest --debug --set-version $SETVERSION -i$MASTERISO -e$TMPECC -c -n normal >>$LOGFILE 2>&1
-
-    cp $MASTERISO $SIMISO
-    $NEWVER --debug -i$SIMISO --byteset 24989,0,1 >>$LOGFILE 2>&1
-    
-    extra_args="--debug --sim-cd=$SIMISO --fixed-speed-values"
-    run_regtest read_with_rs01_file "--spinup-delay=0 -r " $TMPISO $TMPECC
-) & limit_jobs; fi
-
-# Augmented image and non-matching RS01 error correction file
-# Currently the mismatch is (generally) not detected
-# NOTE: There seems to be an intermittent race condition between
-# printing the defective sector number and the reading progress.
-# Ignore for now and debug later.
-# Should we change this behaviour?
-# Expected behaviour for verify is to report the non-matching ecc file
-# rather than falling back to using the RS02 part since the
-# user did probably have some intentention specifying the ecc file.
-
-if try "reading with non-matching RS01 error correction file" read_with_wrong_rs01_file; then (
-    $NEWVER --regtest --debug --set-version $SETVERSION -i$MASTERISO -e$TMPECC -c -n normal >>$LOGFILE 2>&1
-    $NEWVER --debug -i$TMPECC --byteset 0,24,1 >>$LOGFILE 2>&1
-
-    cp $MASTERISO $SIMISO
-    $NEWVER --debug -i$SIMISO --byteset 24989,0,1 >>$LOGFILE 2>&1
-    
-    extra_args="--debug --sim-cd=$SIMISO --fixed-speed-values"
-    run_regtest read_with_wrong_rs01_file "--spinup-delay=0 -r " $TMPISO $TMPECC
-) & limit_jobs; fi
-
 # Augmented image is protected by an outer RS03 error correction file
 
 if try "reading with RS03 error correction file" read_with_rs03_file; then (
@@ -2295,10 +2132,6 @@ if try "reading image with crc error in padding area" read_with_crc_error_in_pad
    extra_args="--debug --sim-cd=$SIMISO --fixed-speed-values"
    run_regtest read_with_crc_error_in_padding "--spinup-delay=0 -r" $TMPISO  $NO_FILE
 ) & limit_jobs; fi
-
-### Reading tests (adaptive)
-
-REGTEST_SECTION="Reading tests (adaptive)"
 
 collect_results
 exit $nbfailed

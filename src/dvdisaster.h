@@ -267,7 +267,6 @@ typedef struct _GlobalClosure
    int minReadAttempts; /* minimum reading attempts */
    int maxReadAttempts; /* maximal reading attempts */
    int internalAttempts;/* read attempts by the drive itself */
-   int adaptiveRead;    /* Use optimized strategy for reading defective images */
    int speedWarning;    /* Print warning if speed changes by more than given percentage */
    int fillUnreadable;  /* Byte value for filling unreadable sectors or -1 */
    int spinupDelay;     /* Seconds to wait for drive to spin up */
@@ -286,7 +285,6 @@ typedef struct _GlobalClosure
    int screenShotMode;  /* screen shot mode */
    int autoSuffix;      /* automatically extend files with suffices .iso/.ecc */
    int ignoreIsoSize;   /* get size per READ CAPACITY; ignore all ISO/UDF meta data */
-   int examineRS02;     /* perform deep search for RS02 structures */
    int examineRS03;     /* perform deep search for RS03 structures */
    int readAndCreate;   /* automatically create .ecc file after reading an image */
    int enableCurveSwitch; /* TRUE in readAndCreateMode after reading is complete */
@@ -1319,7 +1317,6 @@ void GuiCreateLinearReadWindow(GtkWidget*);
  ***/
 
 void GetReadingRange(gint64, gint64*, gint64*);
-void ReadMediumAdaptive(gpointer);
 
 /***
  *** read-adaptive-window.c

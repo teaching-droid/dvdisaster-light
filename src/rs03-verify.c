@@ -652,6 +652,132 @@ static int check_syndromes(verify_closure *vc)
    return ecc_bad;
 }
 
+/*
+ * Graceful report for images carrying no recognizable RS03 data.
+ * The removed RS01 codec used to provide this fallback output for
+ * plain images; replicated here so that verifying an image without
+ * ecc keeps producing a useful report instead of an error.
+ */
+
+static void report_plain_image(Image *image)
+{  struct MD5Context image_md5;
+   unsigned char buf[2048];
+   char idigest[33];
+   gint64 s, first_missing = -1, last_missing = -1;
+   int last_percent = 0;
+
+   PrintLog("\n%s: ", Closure->imageName);
+
+   if(!image || !image->file)
+   {  PrintLog(_("not present\n"));
+      goto process_ecc;
+   }
+
+   if(image->inLast == 2048)
+        PrintLog(_("present, contains %" PRId64 " medium sectors.\n"), image->sectorSize);
+   else PrintLog(_("present, contains %" PRId64 " medium sectors and %d bytes.\n"),
+		 image->sectorSize-1, image->inLast);
+
+   if(Closure->quickVerify)
+   {  PrintLog(_("* quick mode        : image NOT scanned\n"));
+      goto process_ecc;
+   }
+
+   /* Go through all sectors and look for the dead sector marker */
+
+   MD5Init(&image_md5);
+   LargeSeek(image->file, 0);
+   image->sectorsMissing = 0;
+
+   for(s=0; s<image->sectorSize; s++)
+   {  int n,percent,err,current_missing;
+      int unrecoverable_sectors = 0;
+
+      if(Closure->stopActions)
+      {  image->sectorsMissing += image->sectorSize - s;
+	 return;
+      }
+
+      n = LargeRead(image->file, buf, 2048);
+      if(n != 2048)
+      {  if(s != image->sectorSize - 1 || n != image->inLast)
+	    Stop(_("premature end in image (only %d bytes): %s\n"),n,strerror(errno));
+	 else /* Zero unused bytes of the last sector */
+	    memset(buf+image->inLast, 0, 2048-image->inLast);
+      }
+
+      err = CheckForMissingSector(buf, s, image->fpState == 2 ? image->imageFP : NULL,
+				  FINGERPRINT_SECTOR);
+      if(err != SECTOR_PRESENT)
+      {  ExplainMissingSector(buf, s, err, SOURCE_IMAGE, &unrecoverable_sectors);
+	 if(first_missing < 0) first_missing = s;
+	 last_missing = s;
+	 image->sectorsMissing++;
+	 current_missing = TRUE;
+      }
+      else current_missing = FALSE;
+
+      /* Report dead sectors. Combine subsequent missing sectors into one report. */
+
+      if(!current_missing || s==image->sectorSize-1)
+      {  if(first_missing>=0)
+	 {  if(first_missing == last_missing)
+	         PrintCLI(_("* missing sector   : %" PRId64 "\n"), first_missing);
+	    else PrintCLI(_("* missing sectors  : %" PRId64 " - %" PRId64 "\n"), first_missing, last_missing);
+	    first_missing = -1;
+	 }
+      }
+
+      MD5Update(&image_md5, buf, n);
+
+      percent = (100*(s+1))/image->sectorSize;
+      if(last_percent != percent)
+      {  PrintProgress(_("- testing sectors  : %3d%%"), percent);
+	 last_percent = percent;
+      }
+   }
+
+   MD5Final(image->mediumSum, &image_md5);
+   LargeSeek(image->file, 0);
+
+   if(!image->sectorsMissing)
+   {  AsciiDigest(idigest, image->mediumSum);
+      PrintLog(_("- good image       : all sectors present\n"
+		 "- image md5sum     : %s\n"), idigest);
+   }
+   else
+      PrintLog(_("* BAD image        : %" PRId64 " sectors missing\n"), image->sectorsMissing);
+
+process_ecc:
+   PrintLog("\n%s: ", Closure->eccName);
+
+   if(!image)
+   {  PrintLog(_("not present\n"));
+      PrintLog("\n");
+      return;
+   }
+
+   switch(image->eccFileState)
+   {  case ECCFILE_NOPERM:
+	PrintLog(_("permission denied\n"));
+	break;
+      case ECCFILE_INVALID:
+	PrintLog(_("invalid\n"));
+	break;
+      case ECCFILE_DEFECTIVE_HEADER:
+	PrintLog(_("defective header (unusable)\n"));
+	break;
+      case ECCFILE_WRONG_CODEC:
+	PrintLog(_("unknown codec (unusable)\n"));
+	break;
+      default:
+	PrintLog(_("not present\n"));
+	break;
+   }
+
+   PrintLog("\n");
+}
+
 /***
  *** The verify action
  ***/
@@ -696,13 +822,16 @@ void RS03Verify(Image *image)
    vc->image = image;
    vc->wl = wl;
 
-   if(image->eccFileHeader && !strncmp((char*)(image->eccFileHeader->method), "RS03", 4)) 
+   if(image && image->eccFileHeader && !strncmp((char*)(image->eccFileHeader->method), "RS03", 4))
    {      eh = image->eccFileHeader;
    }
-   else if(image->eccHeader && !strncmp((char*)(image->eccHeader->method), "RS03", 4)) 
+   else if(image && image->eccHeader && !strncmp((char*)(image->eccHeader->method), "RS03", 4))
    {      eh = image->eccHeader;
    }
-   else Stop("Internal error: RS03Verify() called without suitable image and ecc file");
+   else  /* no RS03 data anywhere; report the plain image gracefully */
+   {  report_plain_image(image);
+      goto terminate;
+   }
    
    vc->eh = eh; 
 

@@ -35,6 +35,42 @@
 enum { BUF_EMPTY, BUF_FULL, BUF_DEAD, BUF_EOF };
 
 /*
+ * Calculate the reading range (moved here from the removed adaptive reader)
+ */
+
+void GetReadingRange(gint64 sectors, gint64 *firstSector, gint64 *lastSector)
+{  gint64 first, last;
+
+   if(Closure->readStart || Closure->readEnd)
+   {  if(!Closure->guiMode) /* more range checks are made below */
+      {  first = Closure->readStart;
+         last  = Closure->readEnd < 0 ? sectors-1 : Closure->readEnd;
+      }
+      else  /* be more permissive in GUI mode */
+      {  first = 0;
+ 	 last  = sectors-1;
+
+	 if(Closure->readStart <= Closure->readEnd)
+	 {  first = Closure->readStart < sectors ? Closure->readStart : sectors-1;
+	    last  = Closure->readEnd   < sectors ? Closure->readEnd   : sectors-1;
+	 }
+      }
+
+      if(first > last || first < 0 || last >= sectors)
+	Stop(_("Sectors must be in range [0..%" PRId64 "].\n"), sectors-1);
+
+      PrintLog(_("Limiting sector range to [%" PRId64 ",%" PRId64 "].\n"), first, last);
+   }
+   else
+   {  first = 0;
+      last  = sectors-1;
+   }
+
+   *firstSector = first;
+   *lastSector = last;
+}
+
+/*
  * Send EOF to the worker thread
  */
 

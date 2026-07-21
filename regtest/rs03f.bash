@@ -636,43 +636,6 @@ if try "read image and create ecc in one call" ecc_create_after_read; then (
 # Read image with ecc file and create new (other) ecc in the same program call.
 # Tests whether CRC and ECC information is handed over correctly.
 
-if try "read image with ecc (RS01) and create new ecc" ecc_recreate_after_read_rs01; then (
-  cp $MASTERISO $SIMISO
-
-  $NEWVER --regtest --debug --set-version $SETVERSION -i$SIMISO -e$TMPECC -c -n 8r >>$LOGFILE 2>&1
-
-  IGNORE_LOG_LINE="^Avg performance|^Creating the error correction file with Method RS03"
-  replace_config method-name RS03
-  replace_config ecc-target 0
-  replace_config redundancy $REDUNDANCY
-  replace_config read-and-create 1
-  replace_config verbose 1
-  extra_args="--debug --set-version $SETVERSION --sim-cd=$SIMISO  --fixed-speed-values"
-  run_regtest ecc_recreate_after_read_rs01 "-r -c -mRS03 -o file -n$REDUNDANCY -v" $TMPISO $TMPECC
-) & limit_jobs; fi
-
-# Read image with ecc file and create new (other) ecc in the same program call.
-# This will wrap the RS02 image with a RS03 ecc file;  CRC information from
-# the read process will be reused.
-
-if try "read image with ecc (RS02) and create new ecc" ecc_recreate_after_read_rs02; then (
-  cp $MASTERISO $SIMISO
-
-  $NEWVER --regtest --debug --set-version $SETVERSION -i$SIMISO -mRS02 -c -n$((ISOSIZE+3000)) >>$LOGFILE 2>&1
-
-  IGNORE_LOG_LINE="^Avg performance|^Creating the error correction file with Method RS03"
-  replace_config method-name RS03
-  replace_config ecc-target 0
-  replace_config redundancy $REDUNDANCY
-  replace_config read-and-create 1
-  replace_config verbose 1
-  extra_args="--debug --set-version $SETVERSION --sim-cd=$SIMISO  --fixed-speed-values"
-  run_regtest ecc_recreate_after_read_rs02 "-r -c -mRS03 -o file -n$REDUNDANCY -v" $TMPISO $TMPECC
-) & limit_jobs; fi
-
-# Read image with ecc file and create new (other) ecc in the same program call.
-# Tests whether CRC and ECC information is handed over correctly.
-
 if try "read image with ecc (RS03i) and create new ecc" ecc_recreate_after_read_rs03i; then (
   cp $MASTERISO $SIMISO
 
@@ -1512,23 +1475,6 @@ if try "reading medium w/ ecc in 3 passes; 3rd pass recovers some" read_multipas
   run_regtest read_multipass_ecc_partial_success "--read-medium=3 --spinup-delay=0 -r" $TMPISO  $TMPECC SORTED
 ) & limit_jobs; fi
 
-
-### Reading tests (adaptive)
-
-REGTEST_SECTION="Reading tests (adaptive)"
-
-# Adaptive reading of a good image with RS03 ecc file.
-# Regression test: RS03 ecc files were misidentified as RS01 by the
-# adaptive reader, causing GetCRCFromRS01_obsolete() to read garbage
-# CRC data from the RS03 file layout. This resulted in bogus CRC errors
-# for every single sector.
-
-if try "adaptive read, good image with RS03 ecc file" adaptive_good; then (
-  cp $MASTERISO $SIMISO
-
-  extra_args="--debug --sim-cd=$SIMISO --fixed-speed-values"
-  run_regtest adaptive_good "--spinup-delay=0 -r --adaptive-read" $TMPISO $MASTERECC
-) & limit_jobs; fi
 
 collect_results
 exit $nbfailed

@@ -205,7 +205,6 @@ void GuiReadDotfile()
                                                else Closure->eccName = g_strdup(value);
 					       continue; 
                                              }
-      if(!strcmp(symbol, "adaptive-read"))   { Closure->adaptiveRead   = atoi(value); continue; }
       if(!strcmp(symbol, "auto-suffix"))     { Closure->autoSuffix  = atoi(value); continue; }
       if(!strcmp(symbol, "bd-size1"))        { Closure->bdSize1 = Closure->savedBDSize1 = atoll(value); continue; }
       if(!strcmp(symbol, "bd-size2"))        { Closure->bdSize2 = Closure->savedBDSize2 = atoll(value); continue; }
@@ -228,7 +227,6 @@ void GuiReadDotfile()
       if(!strcmp(symbol, "eject"))           { Closure->eject  = atoi(value); continue; }
       if(!strcmp(symbol, "encoding-algorithm")) { Closure->encodingAlgorithm = atoi(value); continue; }
       if(!strcmp(symbol, "encoding-io-strategy")) { Closure->encodingIOStrategy = atoi(value); continue; }
-      if(!strcmp(symbol, "examine-rs02"))    { Closure->examineRS02  = atoi(value); continue; }
       if(!strcmp(symbol, "examine-rs03"))    { Closure->examineRS03  = atoi(value); continue; }
       if(!strcmp(symbol, "bruteforce-rs03-search")) { Closure->bruteforceRS03Search = atoi(value); continue; }
       if(!strcmp(symbol, "fill-unreadable")) { Closure->fillUnreadable = atoi(value); continue; }
@@ -312,7 +310,6 @@ static void update_dotfile()
    g_fprintf(dotfile, "last-image:        %s\n", Closure->imageName);
    g_fprintf(dotfile, "last-ecc:          %s\n\n", Closure->eccName);
 
-   g_fprintf(dotfile, "adaptive-read:     %d\n", Closure->adaptiveRead);
    g_fprintf(dotfile, "auto-suffix:       %d\n", Closure->autoSuffix);
    g_fprintf(dotfile, "bd-size1:          %lld\n", (long long int)Closure->bdSize1);
    g_fprintf(dotfile, "bd-size2:          %lld\n", (long long int)Closure->bdSize2);
@@ -333,7 +330,6 @@ static void update_dotfile()
    g_fprintf(dotfile, "eject:             %d\n", Closure->eject);
    g_fprintf(dotfile, "encoding-algorithm:%d\n", Closure->encodingAlgorithm);
    g_fprintf(dotfile, "encoding-io-strategy:%d\n", Closure->encodingIOStrategy);
-   g_fprintf(dotfile, "examine-rs02:      %d\n", Closure->examineRS02);
    g_fprintf(dotfile, "examine-rs03:      %d\n", Closure->examineRS03);
    g_fprintf(dotfile, "bruteforce-rs03-search:%d\n", Closure->bruteforceRS03Search);
    g_fprintf(dotfile, "fill-unreadable:   %d\n", Closure->fillUnreadable);
@@ -545,7 +541,7 @@ void InitClosure()
    Closure->deviceNames = g_ptr_array_new();
    Closure->deviceNodes = g_ptr_array_new();
    Closure->methodList  = g_ptr_array_new();
-   Closure->methodName  = g_strdup("RS01");
+   Closure->methodName  = g_strdup("RS03");
    Closure->dDumpDir    = g_strdup(Closure->homeDir);
    Closure->cacheMiB    = 32;
    Closure->prefetchSectors = 128;

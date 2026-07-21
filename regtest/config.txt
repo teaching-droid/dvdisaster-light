@@ -7,336 +7,41 @@ INTERACTIVE_DIFF yes
 ### RS01 tests
 
 # Verify tests
-RS01_good yes
-RS01_good_quick yes
-RS01_no_files yes
-RS01_no_image yes
-RS01_no_ecc yes
-RS01_defective_image_no_ecc yes
-RS01_plus56_bytes yes
-RS01_image_plus56_bytes yes
-RS01_ecc_plus56_bytes yes
-RS01_normal_image_ecc_plus56b yes
-RS01_image_plus56b_normal_ecc yes
-RS01_image_few_bytes_shorter yes
-RS01_image_few_bytes_longer yes
-RS01_truncated_by_bytes yes
-RS01_truncated yes
-RS01_plus1 yes
-RS01_plus17 yes
-RS01_defective_with_ecc yes
-RS01_missing_sectors_with_ecc yes
-RS01_crc_errors_with_ecc yes
-RS01_crc_in_fingerprint yes
-RS01_missing_fingerprint yes
-RS01_missing_ecc_header yes
-RS01_ecc_header_crc_error yes
-RS01_uncorrectable_dsm_in_image yes
-RS01_uncorrectable_dsm_in_image_verbose yes
-RS01_uncorrectable_dsm_in_image2 yes
-RS01_uncorrectable_dsm_in_image2_verbose yes
 
 # Create tests
 
-RS01_ecc_create yes
-RS01_ecc_missing_image yes
-RS01_ecc_no_read_perm yes
-RS01_ecc_no_write_perm yes
-RS01_ecc_create_plus56 yes
-RS01_ecc_missing_sectors yes
-RS01_ecc_create_after_read yes
-RS01_ecc_recreate_after_read_rs01 yes
-RS01_ecc_recreate_after_read_rs02 yes
-RS01_ecc_recreate_after_read_rs03i yes
-RS01_ecc_recreate_after_read_rs03f yes
-RS01_ecc_create_after_partial_read yes
-RS01_ecc_recreate_after_read_wrong_rs01 yes
 
 # Repair tests
 
-RS01_fix_good yes
-RS01_fix_no_read_perm yes
-RS01_fix_no_read_perm_ecc yes
-RS01_fix_good_plus56 yes
-RS01_fix_no_write_perm yes
-RS01_fix_missing_sectors yes
-RS01_fix_crc_errors yes
-RS01_fix_additional_sector yes
-RS01_fix_plus17 yes
-RS01_fix_plus17_truncate yes
-RS01_fix_plus56 yes
-RS01_fix_plus56_plus17 yes
-RS01_fix_plus56_plus1s yes
-RS01_fix_plus56_plus2s yes
-RS01_fix_plus56_plus17500 yes
-RS01_fix_truncated yes
-RS01_fix_plus56_truncated yes
-RS01_fix_plus56_little_truncated yes
 
 # Scanning tests
 
-RS01_scan_no_ecc yes
-RS01_scan_no_device yes
-RS01_scan_no_device_access yes
-RS01_scan_defective_no_ecc yes
-RS01_scan_defective_no_ecc_again yes
-RS01_scan_defective_large_skip yes
-RS01_scan_new_with_range_no_ecc yes
-RS01_scan_new_with_invalid_range_no_ecc yes
-RS01_scan_with_ecc yes
-RS01_scan_with_non_existing_ecc yes
-RS01_scan_with_no_permission_for_ecc yes
-RS01_scan_crc_errors_with_ecc yes
-RS01_scan_shorter_with_ecc yes
-RS01_scan_longer_with_ecc yes
-RS01_scan_tao_tail_with_ecc yes
-RS01_scan_no_tao_tail_with_ecc yes
-RS01_scan_more_missing_at_end_with_ecc yes
-RS01_scan_with_double_ecc yes
-RS01_scan_with_incompatible_ecc yes
-RS01_scan_with_hardware_failure yes
-RS01_scan_with_ignored_hardware_failure yes
-RS01_scan_medium_with_dsm yes
 
 # Reading tests (linear)
 
-RS01_read_no_ecc yes
-RS01_read_no_ecc_good_file yes
-RS01_read_no_device yes
-RS01_read_no_device_access yes
-RS01_read_defective_no_ecc yes
-RS01_read_defective_no_ecc_again yes
-RS01_read_defective_large_skip yes
-RS01_read_truncated_no_ecc yes
-RS01_read_truncated_no_ecc_again yes
-RS01_read_multipass_no_ecc_again yes
-RS01_read_with_gap_no_ecc yes
-RS01_read_new_with_range_no_ecc yes
-RS01_read_new_with_invalid_range_no_ecc yes
-RS01_read_two_missing_secs_no_ecc yes
-RS01_read_with_ecc yes
-RS01_read_with_ecc_good_file yes
-RS01_read_with_non_existing_ecc yes
-RS01_read_with_no_permission_for_ecc yes
-RS01_read_crc_errors_with_ecc yes
-RS01_read_shorter_with_ecc yes
-RS01_read_longer_with_ecc yes
-RS01_read_tao_tail_with_ecc yes
-RS01_read_no_tao_tail_with_ecc yes
-RS01_read_more_missing_at_end_with_ecc yes
-RS01_read_wrong_fp_with_ecc yes
-RS01_read_with_double_ecc yes
-RS01_read_with_incompatible_ecc yes
-RS01_read_with_hardware_failure yes
-RS01_read_with_ignored_hardware_failure yes
-RS01_read_multipass_partial_success yes
-RS01_read_multipass_ecc_partial_success yes
-RS01_read_second_pass_with_ecc_success yes
-RS01_read_second_pass_with_crc_error yes
-RS01_read_medium_with_dsm yes
-RS01_read_medium_with_dsm_verbose yes
-RS01_read_medium_with_dsm_in_image yes
-RS01_read_medium_with_dsm_in_image_verbose yes
-RS01_read_medium_with_dsm_in_image2 yes
-RS01_read_medium_with_dsm_in_image2_verbose yes
 
 # Reading tests (adaptive)
 
-RS01_adaptive_good yes
-RS01_adaptive_no_ecc yes
-RS01_adaptive_no_device yes
-RS01_adaptive_no_device_access yes
-RS01_adaptive_defective_no_ecc yes
-RS01_adaptive_defective_large_skip yes
-RS01_adaptive_truncated_no_ecc yes
-RS01_adaptive_truncated_no_ecc_again yes
-RS01_adaptive_with_gap_no_ecc yes
-RS01_adaptive_with_gap_no_ecc2 yes
-RS01_adaptive_with_gap_no_ecc3 yes
-RS01_adaptive_new_with_range_no_ecc yes
-RS01_adaptive_new_with_invalid_range_no_ecc yes
-RS01_adaptive_with_no_permission_for_ecc yes
-RS01_adaptive_crc_errors_with_ecc yes
-RS01_adaptive_shorter_with_ecc yes
-RS01_adaptive_longer_with_ecc yes
-RS01_adaptive_tao_tail_with_ecc yes
-RS01_adaptive_no_tao_tail_with_ecc yes
-RS01_adaptive_wrong_fp_with_ecc yes
-RS01_adaptive_with_double_ecc yes
-RS01_adaptive_with_incompatible_ecc yes
-RS01_adaptive_with_hardware_failure yes
-RS01_adaptive_with_ignored_hardware_failure yes
-RS01_adaptive_medium_with_dsm yes
 
 ### RS02 tests
 
 # Strip tests
 
-RS02_strip_ecc yes
-RS02_strip_ecc_not yes
 
 # Verify tests
-RS02_good yes
-RS02_good_quick yes
-RS02_no_image yes
-RS02_truncated yes
-RS02_plus1 yes
-RS02_plus17 yes
-RS02_bad_header yes
-RS02_bad_headers yes
-RS02_missing_headers yes
-RS02_missing_data_sectors yes
-RS02_missing_crc_sectors yes
-RS02_missing_ecc_sectors yes
-RS02_data_bad_byte yes
-RS02_crc_bad_byte yes
-RS02_ecc_bad_byte yes
-RS02_good_0_offset yes
-RS02_good_150_offset yes
-RS02_bad_master yes
-RS02_modulo_glitch yes
-RS02_modulo_glitch2 yes
-RS02_modulo_glitch3 yes
-RS02_modulo_glitch4 yes
-RS02_with_rs01_file yes
-RS02_with_wrong_rs01_file yes
-RS02_with_rs03_file yes
-RS02_with_wrong_rs03_file yes
-RS02_uncorrectable_dsm_in_image yes
-RS02_uncorrectable_dsm_in_image_verbose yes
-RS02_uncorrectable_dsm_in_image2 yes
-RS02_uncorrectable_dsm_in_image2_verbose yes
-RS02_uncorrectable_dsm_in_image3 yes
 
 # Creation tests
-RS02_ecc_create yes
-RS02_ecc_missing_image yes
-RS02_ecc_no_read_perm yes
-RS02_ecc_no_write_perm yes
-RS02_ecc_from_rs02 yes
-RS02_ecc_from_rs03 yes
-RS02_ecc_from_larger_rs02 yes
-RS02_ecc_from_rs02_non_blocksize yes
-RS02_ecc_from_rs03_non_blocksize yes
-RS02_ecc_from_larger_rs02_non_blocksize yes
-RS02_ecc_non_blocksize yes
-RS02_ecc_missing_sectors yes
-RS02_ecc_create_after_read yes
-RS02_ecc_recreate_after_read_rs01 yes
-RS02_ecc_recreate_after_read_rs02 yes
-RS02_ecc_recreate_after_read_rs03i yes
-RS02_ecc_recreate_after_read_rs03f yes
-RS02_ecc_create_after_partial_read yes
 
 # Repair test
-RS02_fix_no_read_perm yes
-RS02_fix_no_write_perm yes
-RS02_fix_good_image yes
-RS02_fix_image_plus137 no
-RS02_fix_image_error_in_plus137 no
-RS02_fix_truncated_image yes
-RS02_fix_trailing_bytes yes
-RS02_fix_trailing_tao yes
-RS02_fix_trailing_garbage yes
-RS02_fix_trailing_garbage2 yes
-RS02_fix_bad_master yes
-RS02_fix_bad_header yes
-RS02_fix_bad_headers yes
-RS02_fix_missing_headers yes
-RS02_fix_missing_data_sectors yes
-RS02_fix_missing_crc_sectors yes
-RS02_fix_missing_ecc_sectors yes
-RS02_fix_large_file yes
-RS02_fix_data_bad_byte yes
-RS02_fix_crc_bad_byte yes
-RS02_fix_ecc_bad_byte yes
-RS02_fix_good_0_offset yes
-RS02_fix_good_150_offset yes
-RS02_fix_with_rs01_file yes
-RS02_fix_with_rs03_file yes
 
 # Scan tests
 
-RS02_scan_good yes
-RS02_scan_shorter yes
-RS02_scan_longer yes
-RS02_scan_tao_tail yes
-RS02_scan_no_tao_tail yes
-RS02_scan_incompatible_ecc yes
-RS02_scan_bad_header yes
-RS02_scan_bad_headers yes
-RS02_scan_missing_data_sectors yes
-RS02_scan_missing_crc_sectors yes
-RS02_scan_missing_ecc_sectors yes
-RS02_scan_data_bad_byte yes
-RS02_scan_crc_bad_byte yes
-RS02_scan_ecc_bad_byte yes
-RS02_scan_modulo_glitch yes
-RS02_scan_modulo_glitch2 yes
-RS02_scan_modulo_glitch3 yes
-RS02_scan_modulo_glitch4 yes
-RS02_scan_with_rs01_file yes
-RS02_scan_with_wrong_rs01_file yes
-RS02_scan_with_rs03_file yes
-RS02_scan_with_wrong_rs03_file yes
 
 # Reading tests (linear)
 
-RS02_read_good yes
-RS02_read_good_file yes
-RS02_read_good_verbose yes
-RS02_read_shorter yes
-RS02_read_longer yes
-RS02_read_tao_tail yes
-RS02_read_no_tao_tail yes
-RS02_read_incompatible_ecc yes
-RS02_read_bad_master yes
-RS02_read_bad_master_exhaustive yes
-RS02_read_bad_header yes
-RS02_read_bad_headers yes
-RS02_read_missing_data_sectors yes
-RS02_read_missing_crc_sectors yes
-RS02_read_missing_ecc_sectors yes
-RS02_read_data_bad_bytes yes
-RS02_read_crc_bad_byte yes
-RS02_read_ecc_bad_byte yes
-RS02_read_modulo_glitch yes
-RS02_read_modulo_glitch2 yes
-RS02_read_modulo_glitch3 yes
-RS02_read_modulo_glitch4 yes
-RS02_read_with_rs01_file yes
-RS02_read_with_wrong_rs01_file yes
-RS02_read_with_rs03_file yes
-RS02_read_with_wrong_rs03_file yes
-RS02_read_second_pass_with_crc_error yes
-RS02_read_multipass_ecc_partial_success yes
 
 # Reading tests (adaptive)
 
-RS02_adaptive_good yes
-RS02_adaptive_good_file yes
-RS02_adaptive_good_verbose yes
-RS02_adaptive_shorter yes
-RS02_adaptive_longer yes
-RS02_adaptive_tao_tail yes
-RS02_adaptive_no_tao_tail yes
-RS02_adaptive_incompatible_ecc yes
-RS02_adaptive_bad_header yes
-RS02_adaptive_bad_headers yes
-RS02_adaptive_missing_data_sectors yes
-RS02_adaptive_missing_crc_sectors yes
-RS02_adaptive_missing_ecc_sectors yes
-RS02_adaptive_data_bad_byte yes
-RS02_adaptive_crc_bad_byte yes
-RS02_adaptive_ecc_bad_byte yes
-RS02_adaptive_modulo_glitch yes
-RS02_adaptive_modulo_glitch2 yes
-RS02_adaptive_modulo_glitch3 yes
-RS02_adaptive_modulo_glitch4 yes
-RS02_adaptive_with_rs01_file yes
-RS02_adaptive_with_wrong_rs01_file yes
-RS02_adaptive_with_rs03_file yes
-RS02_adaptive_with_wrong_rs03_file yes
 
 ### RS03 augmented image tests
 
@@ -363,8 +68,6 @@ RS03i_data_bad_byte yes
 RS03i_ecc_bad_byte yes
 RS03i_layer_multiple yes
 RS03i_no_padding yes
-RS03i_with_rs01_file yes
-RS03i_with_wrong_rs01_file yes
 RS03i_with_rs03_file yes
 RS03i_with_wrong_rs03_file yes
 RS03i_crc_section_with_uncorrectable_dsm yes
@@ -403,9 +106,7 @@ RS03i_ecc_missing_image yes
 RS03i_ecc_no_read_perm yes
 RS03i_ecc_no_write_perm yes
 RS03i_ecc_from_rs03 yes
-RS03i_ecc_from_rs02 yes
 RS03i_ecc_from_larger_rs03 yes
-RS03i_ecc_from_rs02_non_blocksize yes
 RS03i_ecc_from_rs03_non_blocksize yes
 RS03i_ecc_from_larger_rs03_non_blocksize yes
 RS03i_ecc_non_blocksize yes
@@ -414,8 +115,6 @@ RS03i_ecc_layer_multiple yes
 RS03i_ecc_no_padding yes
 RS03i_ecc_create_after_read yes
 RS03i_ecc_create_after_partial_read yes
-RS03i_ecc_recreate_after_read_rs01 yes
-RS03i_ecc_recreate_after_read_rs02 yes
 RS03i_ecc_recreate_after_read_rs03i yes
 RS03i_ecc_recreate_after_read_rs03f yes
 
@@ -434,7 +133,6 @@ RS03i_fix_border_cases_erasures yes
 RS03i_fix_border_cases_crc_errors yes
 RS03i_fix_layer_multiple yes
 RS03i_fix_no_padding yes
-RS03i_fix_with_rs01_file yes
 RS03i_fix_with_rs03_file yes
 RS03i_fix_with_missing_header yes
 RS03i_fix_with_missing_iso_header yes
@@ -465,8 +163,6 @@ RS03i_scan_missing_ecc_sectors yes
 RS03i_scan_data_bad_byte yes
 RS03i_scan_crc_bad_byte yes
 RS03i_scan_ecc_bad_byte yes
-RS03i_scan_with_rs01_file yes
-RS03i_scan_with_wrong_rs01_file yes
 RS03i_scan_with_rs03_file yes
 RS03i_scan_with_wrong_rs03_file yes
 RS03i_scan_missing_header_not_exhaustive yes
@@ -504,8 +200,6 @@ RS03i_read_missing_iso_header yes
 RS03i_read_data_bad_byte yes
 RS03i_read_crc_bad_byte yes
 RS03i_read_ecc_bad_byte yes
-RS03i_read_with_rs01_file yes
-RS03i_read_with_wrong_rs01_file yes
 RS03i_read_with_rs03_file yes
 RS03i_read_with_wrong_rs03_file yes
 RS03i_read_crc_section_with_uncorrectable_dsm yes
@@ -575,8 +269,6 @@ RS03f_ecc_create_plus56 yes
 RS03f_ecc_missing_sectors yes
 RS03f_ecc_create_after_read yes
 RS03f_ecc_create_after_partial_read yes
-RS03f_ecc_recreate_after_read_rs01 yes
-RS03f_ecc_recreate_after_read_rs02 yes
 RS03f_ecc_recreate_after_read_rs03i yes
 RS03f_ecc_recreate_after_read_rs03f yes
 
@@ -652,4 +344,3 @@ RS03f_read_multipass_ecc_partial_success yes
 
 # Reading tests (adaptive)
 
-RS03f_adaptive_good yes

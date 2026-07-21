@@ -25,7 +25,6 @@
 #include "dvdisaster.h"
 
 #include "scsi-layer.h"
-#include "rs02-includes.h"
 
 /***
  *** Create a CRC buffer ready for accumulating CRC and MD5 sums
