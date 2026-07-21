@@ -1356,7 +1356,7 @@ function get_opengl_libs()
         echo "No suitable Motif drawing area for OpenGL found."
 	echo "Please specify the library location using the following option:"
 	echo "--glwm-libraries=DIR"
-	echo "Read INSTALL for hints about this error."
+	echo "Read README.md for hints about this error."
         exit 1
       fi
    fi

@@ -1,9 +1,0 @@
-11-no-cruft.patch
-15-show-new-pkg-tracker.patch
-16-remove-auto-build-of-doco-from-install-rule.patch
-20-display-changelog-credits-and-todo.patch
-24-show-gpl3-license.patch
-26-fix-display-of-manual.pdf.patch
-32-display-compilation-commands.patch
-34-gcc8-format-security.patch
-37-suggest-dvdisaster-doc.patch

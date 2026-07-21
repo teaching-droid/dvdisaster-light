@@ -141,10 +141,6 @@ dvdisaster: $(OFILES)
 	else $(MAKE) --no-print-directory -C locale; \
 	fi
 
-$(BUILDTMP)/inlined-icons.c: icons/icons.gresource.xml icons/cd.svg icons/close.svg icons/create.svg icons/fix-symbolic.svg icons/log.svg icons/manual.svg icons/open-ecc.svg icons/open-img.svg icons/preferences.svg icons/quit.svg icons/read-symbolic.svg icons/scan-symbolic.svg icons/stop.svg icons/strip.svg icons/verify-symbolic.svg
-	@echo "Generating:" $(ICONS)
-	@glib-compile-resources --generate-source --target=$(ICONS) --sourcedir=icons icons/icons.gresource.xml
-
 $(BUILDTMP)/rs-encoder-sse2.o: src/rs-encoder-sse2.c
 	@echo "Compiling:" src/rs-encoder-sse2.c
 	@$(CC) $(SSE2_OPTIONS) $(COPTS) -c src/rs-encoder-sse2.c -o $(BUILDTMP)/rs-encoder-sse2.o
@@ -163,18 +159,6 @@ version.tex:
 	@test -d $(SRCDIR)/documentation/config || mkdir $(SRCDIR)/documentation/config
 	@echo "\\newcommand{\\projectversion}{$(VERSION)}" >$(SRCDIR)/documentation/config/version.tex
 	@echo "\\newcommand{\\homepage}{\\url{$(HOMEPAGE)}}" >>$(SRCDIR)/documentation/config/version.tex
-
-manual: version.tex
-	@echo "Producing user manual... "
-	@$(MAKE) --no-print-directory -C documentation/user-manual manual.pdf
-
-manualclean:
-	@echo "Removing temporary user manual files... "
-	@$(MAKE) --no-print-directory -C documentation/user-manual clean
-
-manualarchclean:
-	@echo "Removing generated user manual files... "
-	@$(MAKE) --no-print-directory -C documentation/user-manual archclean
 
 codecs:
 	@echo "Producing codecs specification documentation... "
@@ -268,9 +252,6 @@ install: dvdisaster manual
 	install -m 644 CHANGELOG "$(BUILDROOT)$(DOCSUBDIR)"
 	install -m 644 COPYING "$(BUILDROOT)$(DOCSUBDIR)"
 	install -m 644 CREDITS* "$(BUILDROOT)$(DOCSUBDIR)"
-	install -m 644 TODO "$(BUILDROOT)$(DOCSUBDIR)"
-	install -d "$(BUILDROOT)$(DOCSUBDIR)"
-	(cd documentation/user-manual; install -m 644 manual.pdf "$(BUILDROOT)$(DOCSUBDIR)")
 	install -d "$(BUILDROOT)$(MANDIR)/man1"
 	install -d "$(BUILDROOT)$(MANDIR)/de/man1"
 	cd documentation; \
@@ -295,8 +276,6 @@ install: dvdisaster manual
 	@echo "rm -f \"$(DOCSUBDIR)/COPYING\"" >> "$(BUILDROOT)$(BINDIR)/dvdisaster-uninstall.sh"
 	@echo "rm -f \"$(DOCSUBDIR)/CREDITS.de\"" >> "$(BUILDROOT)$(BINDIR)/dvdisaster-uninstall.sh"
 	@echo "rm -f \"$(DOCSUBDIR)/CREDITS.en\"" >> "$(BUILDROOT)$(BINDIR)/dvdisaster-uninstall.sh"
-	@echo "rm -f \"$(DOCSUBDIR)/manual.pdf\"" >> "$(BUILDROOT)$(BINDIR)/dvdisaster-uninstall.sh"
-	@echo "rm -f \"$(DOCSUBDIR)/TODO\"" >> "$(BUILDROOT)$(BINDIR)/dvdisaster-uninstall.sh"
 	@echo "rmdir \"$(DOCSUBDIR)\"" >> "$(BUILDROOT)$(BINDIR)/dvdisaster-uninstall.sh"
 	@for i in $(PO_LOCALES); do \
 	  echo "rm \"$(LOCALEDIR)/$$i/LC_MESSAGES/dvdisaster.mo\"" >> "$(BUILDROOT)$(BINDIR)/dvdisaster-uninstall.sh" ; \
@@ -314,8 +293,6 @@ uninstall:
 	rm -f "$(DOCSUBDIR)/COPYING"
 	rm -f "$(DOCSUBDIR)/CREDITS.de"
 	rm -f "$(DOCSUBDIR)/CREDITS.en"
-	rm -f "$(DOCSUBDIR)/manual.pdf"
-	rm -f "$(DOCSUBDIR)/TODO"
 	rmdir "$(DOCSUBDIR)"
 	rm -f "$(MANDIR)/man1/dvdisaster.1"
 	for i in $(PO_LOCALES); do \
@@ -328,7 +305,6 @@ uninstall:
 archclean: distclean
 	@echo "Removing rebuildable documentation parts"
 	@$(MAKE) --no-print-directory -C $(SRCDIR)/documentation/codec-specs archclean
-	@$(MAKE) --no-print-directory -C $(SRCDIR)/documentation/user-manual archclean
 
 distclean: clean
 	@echo "Removing configuration files"
@@ -345,17 +321,13 @@ clean:
 	@find . -name \#\*\# -print | xargs rm -f;
 	@rm -f documentation/config/version.tex
 	@$(MAKE) --no-print-directory -C $(SRCDIR)/documentation/codec-specs clean;
-	@$(MAKE) --no-print-directory -C $(SRCDIR)/documentation/user-manual clean;
 	@$(MAKE) --no-print-directory -C $(SRCDIR)/locale clean;
 
 BUILD=`grep BUILD $(SRCDIR)/src/build.h | cut -d ' ' -f 3`
 arch:	archclean build.h
 	@cd .. ; tar -c -z -f $(TAR_PREFIX)/$(PKGNAME)-$(BUILD).tgz $(PKGNAME)
 
-INSTALL: documentation/install.template
-	@sed "s/@@PKGNAME/$(PKGNAME)/" <documentation/install.template >INSTALL
-
-srcdist: INSTALL distclean manual manualclean codecsclean
+srcdist: distclean codecsclean
 	@cd .. ; tar -c -j --owner=dvdisaster --group=devel -X $(PKGNAME)/NODIST -f $(TAR_PREFIX)/$(PKGNAME).tar.bz2 $(PKGNAME)
 	@cd .. ; gpg --homedir .gnupg --default-key 758BCC23 --detach-sign --output $(TAR_PREFIX)/$(PKGNAME).tar.bz2.gpg --armor $(TAR_PREFIX)/$(PKGNAME).tar.bz2 
 
