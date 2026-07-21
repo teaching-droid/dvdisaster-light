@@ -226,9 +226,65 @@ static void encode_next_layer_64bit(ReedSolomonTables *rt, unsigned char *data, 
 
 void encode_next_layer_sse2(ReedSolomonTables*, unsigned char*, unsigned char*, guint64, int);
 void encode_next_layer_altivec(ReedSolomonTables*, unsigned char*, unsigned char*, guint64, int);
+void encode_next_layer_avx2(ReedSolomonTables*, unsigned char*, unsigned char*, guint64, int);
+
+/*
+ * AVX2 capability probe. Lives here, in a translation unit compiled
+ * WITHOUT -mavx2, so that no VEX encoded instruction can run before
+ * the probe has answered. Requires: OSXSAVE enabled, XCR0 reporting
+ * XMM and YMM state saved by the OS, and the AVX2 feature bit.
+ */
+
+#ifdef HAVE_AVX2
+ #ifdef HAVE_CPUID
+  #include <cpuid.h>
+ #else
+  #include "compat/cpuid.h"
+ #endif
+
+int ProbeAVX2(void)
+{  unsigned int eax, ebx, ecx, edx;
+   unsigned int xcr0_lo, xcr0_hi;
+
+   if(!__get_cpuid(1, &eax, &ebx, &ecx, &edx))
+   {  Verbose("[ProbeAVX2: get_cpuid() failed]\n");
+      return 0;
+   }
+
+   if(!(ecx & (1u<<27)))   /* OSXSAVE: OS supports xgetbv */
+   {  Verbose("[ProbeAVX2: no OSXSAVE]\n");
+      return 0;
+   }
+
+   __asm__ (".byte 0x0f, 0x01, 0xd0"   /* xgetbv */
+	    : "=a"(xcr0_lo), "=d"(xcr0_hi) : "c"(0));
+   if((xcr0_lo & 0x6) != 0x6)   /* XMM and YMM state enabled */
+   {  Verbose("[ProbeAVX2: YMM state not enabled by OS]\n");
+      return 0;
+   }
+
+   if(__get_cpuid_max(0, NULL) < 7)
+   {  Verbose("[ProbeAVX2: no leaf 7]\n");
+      return 0;
+   }
+
+   __cpuid_count(7, 0, eax, ebx, ecx, edx);
+   if(ebx & (1u<<5))
+   {  Verbose("[ProbeAVX2: AVX2 available]\n");
+      return 1;
+   }
+
+   Verbose("[ProbeAVX2: no AVX2]\n");
+   return 0;
+}
+#else
+int ProbeAVX2(void)
+{  return 0;
+}
+#endif /* HAVE_AVX2 */
 
 void EncodeNextLayer(ReedSolomonTables *rt, unsigned char *data, unsigned char *parity, guint64 layer_size, int shift)
-{   
+{
     switch(Closure->encodingAlgorithm)
     {  case ENCODING_ALG_32BIT:
           encode_next_layer_portable(rt, data, parity, layer_size, shift);
@@ -242,8 +298,13 @@ void EncodeNextLayer(ReedSolomonTables *rt, unsigned char *data, unsigned char *
        case ENCODING_ALG_ALTIVEC:
 	  encode_next_layer_altivec(rt, data, parity, layer_size, shift);
 	  break;
+       case ENCODING_ALG_AVX2:
+	  encode_next_layer_avx2(rt, data, parity, layer_size, shift);
+	  break;
        case ENCODING_ALG_DEFAULT:
-	 if(Closure->useSSE2)
+	 if(Closure->useAVX2)
+	   encode_next_layer_avx2(rt, data, parity, layer_size, shift);
+	 else if(Closure->useSSE2)
 	   encode_next_layer_sse2(rt, data, parity, layer_size, shift);
 	 else if(Closure->useAltiVec)
 	   encode_next_layer_altivec(rt, data, parity, layer_size, shift);
@@ -272,13 +333,18 @@ void DescribeRSEncoder(char **algorithm, char **iostrategy)
      case ENCODING_ALG_ALTIVEC:
         *algorithm="AltiVec";
 	break;
+     case ENCODING_ALG_AVX2:
+        *algorithm="AVX2";
+	break;
      case ENCODING_ALG_DEFAULT:
-        if(Closure->useSSE2)
+        if(Closure->useAVX2)
+	  *algorithm="AVX2";
+	else if(Closure->useSSE2)
 	  *algorithm="SSE2";
 	else if(Closure->useAltiVec)
 	  *algorithm="AltiVec";
 	else
-	  *algorithm="64bit";
+	  *algorithm="32bit";
 	break;
   }
 

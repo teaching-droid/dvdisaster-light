@@ -82,6 +82,7 @@ WITH_OPTIONS = $(CFG_WITH_OPTIONS)
 OTHER_OPTIONS = $(CFG_OTHER_OPTIONS) -DVERSION="\"$(VERSION)\""
 SSE2_OPTIONS = $(CFG_SSE2_OPTIONS)
 ALTIVEC_OPTIONS = $(CFG_ALTIVEC_OPTIONS)
+AVX2_OPTIONS = $(CFG_AVX2_OPTIONS)
 
 LOCATIONS = -DSRCDIR="\"$(SRCDIR)\"" -DBINDIR="\"$(BINDIR)\"" -DDOCDIR="\"$(DOCSUBDIR)\"" -DLOCALEDIR="\"$(LOCALEDIR)\""
 COPTS = $(CFLAGS) $(LOCATIONS) $(SYS_OPTIONS) $(SYS_NAME) $(HAVE_OPTIONS) $(WITH_OPTIONS) $(OTHER_OPTIONS) $(INTL_INCL) $(CAM_INCL) $(GTK_CFLAGS) $(GLIB_CFLAGS)
@@ -144,6 +145,10 @@ dvdisaster: $(OFILES)
 $(BUILDTMP)/rs-encoder-sse2.o: src/rs-encoder-sse2.c
 	@echo "Compiling:" src/rs-encoder-sse2.c
 	@$(CC) $(SSE2_OPTIONS) $(COPTS) -c src/rs-encoder-sse2.c -o $(BUILDTMP)/rs-encoder-sse2.o
+
+$(BUILDTMP)/rs-encoder-avx2.o: src/rs-encoder-avx2.c
+	@echo "Compiling:" src/rs-encoder-avx2.c
+	@$(CC) $(AVX2_OPTIONS) $(COPTS) -c src/rs-encoder-avx2.c -o $(BUILDTMP)/rs-encoder-avx2.o
 
 $(BUILDTMP)/rs-encoder-altivec.o: src/rs-encoder-altivec.c
 	@echo "Compiling:" src/rs-encoder-altivec.c

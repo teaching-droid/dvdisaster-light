@@ -206,6 +206,7 @@ int main(int argc, char *argv[])
         as some may be CPU-related. */
 
    Closure->useSSE2 = ProbeSSE2();
+   Closure->useAVX2 = ProbeAVX2();
    Closure->useAltiVec = ProbeAltiVec();
    Closure->clSize = ProbeCacheLineSize();
 
@@ -430,6 +431,14 @@ int main(int argc, char *argv[])
 	     Closure->encodingAlgorithm = ENCODING_ALG_32BIT;
 	   if(!strcmp(optarg, "64bit"))
 	     Closure->encodingAlgorithm = ENCODING_ALG_64BIT;
+#ifdef HAVE_AVX2
+	   if(!strcmp(optarg, "AVX2"))
+	   {  Closure->encodingAlgorithm = ENCODING_ALG_AVX2;
+
+	     if(!Closure->useAVX2)
+	       Stop(_("--encoding-algorithm: AVX2 not supported on this processor!"));
+	   }
+#endif
 #ifdef HAVE_SSE2
 	   if(!strcmp(optarg, "SSE2"))
 	   {  Closure->encodingAlgorithm = ENCODING_ALG_SSE2;
@@ -439,7 +448,11 @@ int main(int argc, char *argv[])
 	   }
 
 	   if(Closure->encodingAlgorithm == ENCODING_ALG_INVALID)
+#ifdef HAVE_AVX2
+	     Stop(_("--encoding-algorithm: valid types are 32bit, 64bit, SSE2, AVX2"));
+#else
 	     Stop(_("--encoding-algorithm: valid types are 32bit, 64bit, SSE2"));
+#endif
 #endif
 #ifdef HAVE_ALTIVEC
 	   if(!strcmp(optarg, "AltiVec"))
@@ -984,7 +997,7 @@ int main(int argc, char *argv[])
 #endif
       PrintCLI(_("  --bruteforce-rs03-search   - enable bruteforce linear scan for RS03 data (slow!)\n"));
       PrintCLI(_("  --eject                    - eject medium after successful read\n"));
-      PrintCLI(_("  --encoding-algorithm x     - possible values: 32bit, 64bit, SSE2, AltiVec\n"));
+      PrintCLI(_("  --encoding-algorithm x     - possible values: 32bit, 64bit, SSE2, AVX2, AltiVec\n"));
       PrintCLI(_("  --encoding-io-strategy x   - possible values: readwrite, mmap\n"));
       PrintCLI(_("  --fill-unreadable n        - fill unreadable sectors with byte n\n"));
       PrintCLI(_("  --ignore-fatal-sense       - continue reading after potentially fatal error conditon\n"));

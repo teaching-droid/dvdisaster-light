@@ -2100,6 +2100,66 @@ EOF
 }
 
 #
+# Check for AVX2 (compiler support only; runtime capability is probed
+# separately at program start).
+#
+
+function CHECK_AVX2()
+{
+   if test -n "$cfg_help_mode"; then
+     echo " --with-avx2=[yes | no]"
+     return 0
+   fi
+
+   CHECK_AVX2_INVOKED=1
+
+   echo -e "\n/* *** CHECK_AVX2 */\n" >>$LOGFILE
+   echo -n "Checking for AVX2..."
+
+   # See if user wants to override our test
+
+   if test -n "$cfg_with_avx2"; then
+      case "$cfg_with_avx2" in
+	no)  echo " no (user supplied)"
+	        ;;
+	yes) echo " yes (user supplied)"
+	        CFG_HAVE_OPTIONS="$CFG_HAVE_OPTIONS -DHAVE_AVX2"
+	        CFG_AVX2_OPTIONS="-mavx2"
+	        ;;
+        *) echo -e " $cfg_with_avx2 (illegal value)\n"
+	   echo "Please use one of the following values:"
+	   echo "--with-avx2=[yes | no]"
+	   exit 1
+	   ;;
+      esac
+      return 0;
+   fi
+
+   # Do automatic detection
+
+   cat > conftest.c <<EOF
+#include <immintrin.h>
+
+int main()
+{ __m256i a, b, c;
+
+  c = _mm256_xor_si256(a, b);
+}
+EOF
+
+   local cflags_save=$CFG_CFLAGS
+   CFG_CFLAGS="-mavx2 $CFG_CFLAGS"
+   if try_compile; then
+      echo " yes"
+      CFG_HAVE_OPTIONS="$CFG_HAVE_OPTIONS -DHAVE_AVX2"
+      CFG_AVX2_OPTIONS="-mavx2"
+   else
+      echo " no"
+   fi
+   CFG_CFLAGS=$cflags_save
+}
+
+#
 # Check for AltiVec.
 #
 
@@ -2206,6 +2266,9 @@ function CREATE_MAKEFILES()
    fi
    if test -n "$CHECK_ALTIVEC_INVOKED"; then
      echo "CFG_ALTIVEC_OPTIONS = $CFG_ALTIVEC_OPTIONS" >> Makefile.config
+   fi
+   if test -n "$CHECK_AVX2_INVOKED"; then
+     echo "CFG_AVX2_OPTIONS = $CFG_AVX2_OPTIONS" >> Makefile.config
    fi
    echo >> Makefile.config
 
