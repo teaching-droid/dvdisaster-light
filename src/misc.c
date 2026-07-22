@@ -216,7 +216,7 @@ static void print_greetings(FILE *where)
 
    greetings_shown = 1;
    g_fprintf(where, "%s\n%s\n", Closure->versionString,
-	     _("Copyright 2004-2017 Carsten Gnoerlich.\nCopyright 2019-2021 The dvdisaster development team."));
+	     _("Copyright 2004-2017 Carsten Gnoerlich.\nCopyright 2019-2021 The dvdisaster development team.\nCopyright 2026 The dvdisaster Light contributors."));
    /* TRANSLATORS: Excluding all kinds of warranty might be harmful under your
       legislature. If in doubt, just translate the following like "This is free
       software; please refer to the conditions of the GNU GENERAL PUBLIC LICENSE

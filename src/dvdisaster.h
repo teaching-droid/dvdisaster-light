@@ -312,6 +312,7 @@ typedef struct _GlobalClosure
    int useAVX2;         /* TRUE means to use AVX2 version of the codec. */
    int clDeviceMode;    /* CL_DEVICE_MODE_*: GPU usage for RS03 encoding */
    int clDeviceIndex;   /* explicit GPU index for CL_DEVICE_MODE_GPU */
+   int prefetchSet;     /* TRUE when --prefetch-sectors was given explicitly */
    int clSize;          /* Bytesize of cache line */
    int useSCSIDriver;   /* Whether to use generic or sg driver on Linux */
    int fixedSpeedValues;/* output fixed speed reading to make comparing debugging output easier */  
@@ -963,6 +964,8 @@ ssize_t LargeRead(LargeFile*, void*, size_t);
 ssize_t LargeWrite(LargeFile*, void*, size_t);
 int LargeClose(LargeFile*);
 int LargeTruncate(LargeFile*, off_t);
+int LargeSetSparse(LargeFile*);
+int LargeSync(LargeFile*);
 int LargeStat(char*, guint64*);
 int DirStat(char*);
 char *ApplyAutoSuffix(char*, char*);
@@ -1506,10 +1509,12 @@ int ProbeAVX2(void);
 
 typedef struct _CLEncoder CLEncoder;
 
+int CLDevicePresent(void);
 void CLListDevices(void);
 CLEncoder* CLEncoderInit(ReedSolomonTables*, int ndata, guint64 maxColumns,
 			 int deviceIndex, char *reason, int reasonLen);
-int CLEncoderEncode(CLEncoder*, unsigned char **layers, guint64 columns);
+int CLEncoderUploadLayer(CLEncoder*, int layer, unsigned char *buf, guint64 columns);
+int CLEncoderRun(CLEncoder*, guint64 columns);
 int CLEncoderDownload(CLEncoder*, unsigned char **slices, guint64 columns);
 void CLEncoderFree(CLEncoder*);
 char* CLEncoderDeviceName(CLEncoder*);

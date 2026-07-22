@@ -579,6 +579,7 @@ int main(int argc, char *argv[])
 	    break;
          case MODIFIER_PREFETCH_SECTORS:
  	    Closure->prefetchSectors = atoi(optarg);
+	    Closure->prefetchSet = TRUE;
 	    if(   Closure->prefetchSectors < 32
 	       || Closure->prefetchSectors > MAX_PREFETCH_CACHE_SIZE)
 	      Stop(_("--prefetch-sectors must be in range 32...%d"),
