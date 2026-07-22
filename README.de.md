@@ -21,11 +21,14 @@ Entfernt:
 * die GTK-Oberfläche; dieser Fork ist ein Kommandozeilen-Werkzeug (eine grafische Oberfläche erscheint später eventuell als eigenständiges Programm)
 * die adaptive Lesestrategie
 
-Geplant (die Versionsnummer sagt es: dies ist eine frühe Ausgabe eines größeren Plans):
+Vom Fork hinzugefügt:
 
-* ein **OpenCL-RS03-Kodierer** mit GPU-Auswahl und CPU-Rückfallebene
-* ein AVX2-CPU-Pfad neben dem vorhandenen SSE2-Pfad
-* Windows 7 SP1 und neuer bleiben unterstützt
+* ein **OpenCL-GPU-Kodierer** für RS03 mit Geräteauswahl: `--encoding-device auto|cpu|gpu[:n]|list`. Die Vorgabe wählt die stärkste GPU und fällt ohne OpenCL-Treiber stillschweigend auf die CPU zurück; Treiber aller Hersteller funktionieren.
+* ein **AVX2**-CPU-Kodierer neben dem SSE2-Pfad (wird zur Laufzeit automatisch gewählt)
+* die Kodierung startet sofort und schreibt deutlich weniger: Fehlerkorrektur-Dateien werden nicht mehr mit Platzhalter-Sektoren vorbeschrieben, und die Parität wird in großen Blöcken geschrieben
+* eine Zeitaufschlüsselung der Pipeline unter `--verbose`
+* ein GPU-Paritätstest (`regtest/gpu-parity.bash`), der für jedes GPU-Gerät bitgleiche Ausgabe mit den CPU-Kodierern nachweist
+* Windows 7 SP1 und neuer bleiben unterstützt (automatisch in der CI geprüft)
 
 ## Kompatibilitätsversprechen
 
@@ -51,6 +54,17 @@ pacman -S --needed git diffutils make pkg-config mingw-w64-x86_64-glib2 mingw-w6
 ```
 
 Regressionstests: `cd regtest && ./runtests.sh` (das Verzeichnis `/var/tmp/regtest` muss existieren).
+
+## Leistung
+
+Zahlen von einem Beispielsystem (Desktop-CPU mit 8 Kernen, aktuelle dedizierte NVIDIA-GPU, NVMe-Speicher); absolute Werte fallen auf anderen Rechnern anders aus:
+
+| Aufgabe | dvdisaster Light 0.1.0 (CPU) | aktuell (CPU) | aktuell (GPU) |
+|---------|------------------------------|---------------|---------------|
+| 42-GB-Abbild, 32 Roots (14,3 %) | rund 7 Minuten | 56 s | 27 s |
+| 2-GB-Abbild, 170 Roots (200 %) | 17 s | 4,2 s | 3,2 s |
+
+Zwei praktische Hinweise: Die Fehlerkorrektur-Datei auf ein **anderes Laufwerk** schreiben als das mit dem Abbild (Lesen und Schreiben konkurrieren dann nicht um dasselbe Gerät), und die automatische Geräteauswahl arbeiten lassen; ein Gerät zu erzwingen ist nur zum Testen nötig.
 
 ## Dank und Lizenz
 

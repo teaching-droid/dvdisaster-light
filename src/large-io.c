@@ -282,6 +282,51 @@ int LargeTruncate(LargeFile *lf, off_t length)
    return result;
 }
 
+/*
+ * Mark a file as sparse. A no-op outside Windows, where extending a
+ * file with ftruncate() leaves a sparse hole by itself.
+ *
+ * ORDERING REQUIREMENT: this must be called BEFORE the file is
+ * extended with LargeTruncate(). Without the sparse attribute, NTFS
+ * tracks a "valid data length" for the file, and the first write
+ * beyond it triggers a synchronous zero fill of everything in
+ * between - exactly the cost the sparse attribute is meant to avoid.
+ */
+
+int LargeSetSparse(LargeFile *lf)
+{
+#ifdef SYS_MINGW
+   intptr_t handle;
+   DWORD returned;
+
+   if((handle=_get_osfhandle(lf->fileHandle)) == -1)
+      return FALSE;
+
+   return DeviceIoControl((HANDLE)handle, FSCTL_SET_SPARSE,
+			  NULL, 0, NULL, 0, &returned, NULL) != 0;
+#else
+   return TRUE;
+#endif
+}
+
+/*
+ * Flush a file's buffers to stable storage.
+ */
+
+int LargeSync(LargeFile *lf)
+{
+#ifdef SYS_MINGW
+   intptr_t handle;
+
+   if((handle=_get_osfhandle(lf->fileHandle)) == -1)
+      return FALSE;
+
+   return FlushFileBuffers((HANDLE)handle) != 0;
+#else
+   return fsync(lf->fileHandle) == 0;
+#endif
+}
+
 /***
  *** Convenience functions
  ***/

@@ -138,6 +138,15 @@ typedef struct
    gint64 tGpuKernel;       /* GPU thread: kernel run incl. upload drain */
    gint64 tGpuWaitSlices;   /* GPU thread idle: waiting for parity flush (IO write side) */
    gint64 tGpuDownload;     /* GPU thread: parity download */
+   gint64 tExpand;          /* setup: expand_image pre-write */
+   gint64 tCreateStart;     /* monotonic time at RS03Create entry */
+
+   /* Byte accounting for the end-of-encode completeness check: kept
+      per root so a duplicate write cannot mask an unwritten hole. */
+
+   guint64 parityBytes[256];
+   guint64 crcBytes;
+   gint64 tCore;            /* wall time of the encoding core */
 } ecc_closure;
 
 #define TIMER_START(t0) gint64 t0 = g_get_monotonic_time()
@@ -762,6 +771,7 @@ static void flush_crc(ecc_closure *ec, LargeFile *file_out)
    {  ec->abortImmediately = TRUE;
       Stop(_("Failed writing to sector %" PRId64 " in image: %s"), crc_sect, strerror(errno));
    }
+   ec->crcBytes += bytes;
 
    TIMER_ADD(ec->tIoFlushCrc, t0);
 }
@@ -788,6 +798,7 @@ static void flush_parity(ecc_closure *ec, LargeFile *file_out)
       {  ec->abortImmediately = TRUE;
 	 Stop(_("Failed writing to sector %" PRId64 " in image: %s"), s, strerror(errno));
       }
+      ec->parityBytes[k] += bytes;
    }
    verbose("%s", "IO: parity written.\n");
 
@@ -1528,24 +1539,34 @@ static void create_reed_solomon(ecc_closure *ec)
       }
       verbose("%s", "SCHED: scheduler finished.\n");
 
-      /*** Report the pipeline timing breakdown */
-
-      {  double wall = (g_get_monotonic_time() - tWall)/1000000.0;
-
-	 Verbose("[timing] wall %.1fs\n", wall);
-	 Verbose("[timing] io: read %.1fs, write parity %.1fs, write crc %.1fs, "
-		 "idle waiting for encoder %.1fs\n",
-		 ec->tIoRead/1000000.0, ec->tIoFlushParity/1000000.0,
-		 ec->tIoFlushCrc/1000000.0, ec->tIoWaitEnc/1000000.0);
-	 if(ec->gpu)
-	    Verbose("[timing] gpu: crc %.1fs, upload %.1fs, kernel %.1fs, "
-		    "download %.1fs, idle waiting for input %.1fs, "
-		    "idle waiting for flush %.1fs\n",
-		    ec->tGpuCrc/1000000.0, ec->tGpuUpload/1000000.0,
-		    ec->tGpuKernel/1000000.0, ec->tGpuDownload/1000000.0,
-		    ec->tGpuWaitWork/1000000.0, ec->tGpuWaitSlices/1000000.0);
-      }
+      ec->tCore = g_get_monotonic_time() - tWall;
    }
+}
+
+/*
+ * Report the pipeline timing breakdown. Called from RS03Create after
+ * the progress output has been terminated, so the report starts on a
+ * clean line.
+ */
+
+static void report_timing(ecc_closure *ec)
+{  double wall = ec->tCore/1000000.0;
+   double total = (g_get_monotonic_time() - ec->tCreateStart)/1000000.0;
+   double other = total - wall - ec->tExpand/1000000.0;
+
+   Verbose("[timing] total %.1fs = setup expand %.1fs + other setup %.1fs + encoding core %.1fs\n",
+	   total, ec->tExpand/1000000.0, other < 0 ? 0 : other, wall);
+   Verbose("[timing] io: read %.1fs, write parity %.1fs, write crc %.1fs, "
+	   "idle waiting for encoder %.1fs\n",
+	   ec->tIoRead/1000000.0, ec->tIoFlushParity/1000000.0,
+	   ec->tIoFlushCrc/1000000.0, ec->tIoWaitEnc/1000000.0);
+   if(ec->gpu)
+      Verbose("[timing] gpu: crc %.1fs, upload %.1fs, kernel %.1fs, "
+	      "download %.1fs, idle waiting for input %.1fs, "
+	      "idle waiting for flush %.1fs\n",
+	      ec->tGpuCrc/1000000.0, ec->tGpuUpload/1000000.0,
+	      ec->tGpuKernel/1000000.0, ec->tGpuDownload/1000000.0,
+	      ec->tGpuWaitWork/1000000.0, ec->tGpuWaitSlices/1000000.0);
 }
 
 /***
@@ -1567,6 +1588,7 @@ void RS03Create(void)
    ec->self = method;
    ec->wl = wl;
    ec->earlyTermination = TRUE;
+   ec->tCreateStart = g_get_monotonic_time();
 
    RegisterCleanup(_("Error correction data creation aborted"), ecc_cleanup, ec);
 
@@ -1704,7 +1726,36 @@ void RS03Create(void)
 
    /*** Expand the image by ecc_sectors. */
 
-   expand_image(ec);
+   {  TIMER_START(tEx);
+
+      if(Closure->eccTarget == ECC_FILE)
+      {  /* Ecc files skip the placeholder pre-write entirely: nothing
+	    reads a placeholder back during encoding, and every sector
+	    is written exactly once by the flushes (verified by the
+	    per root byte accounting at the end). The file is only
+	    extended to its final size; the header is written LAST, so
+	    an interrupted run leaves a file that is not recognized as
+	    an ecc file at all.
+
+	    The sparse attribute must be set BEFORE the extension:
+	    see LargeSetSparse() for the ordering requirement. */
+
+	 guint64 eccSize = 2048*(2 + lay->sectorsPerLayer
+				 + lay->nroots*lay->sectorsPerLayer);
+
+	 if(!LargeSetSparse(image->eccFile))
+	    Verbose("Note: could not set the sparse attribute; "
+		    "the filesystem may zero fill on first write.\n");
+
+	 if(!LargeTruncate(image->eccFile, eccSize))
+	    Stop(_("Failed expanding the ecc file: %s\n"), strerror(errno));
+
+	 prepare_header(ec);
+      }
+      else expand_image(ec);
+
+      TIMER_ADD(ec->tExpand, tEx);
+   }
 
    /*** Create the CRC and Reed-Solomon parts */
 
@@ -1713,6 +1764,43 @@ void RS03Create(void)
    create_reed_solomon(ec);
    g_timer_stop(ec->avgTimer);
    g_timer_stop(ec->contTimer);
+
+   /*** Completeness check and deferred header write for ecc files.
+
+	The per root accounting proves every parity and CRC sector was
+	written (a duplicate write cannot mask a hole in another root).
+	Only then is everything synced to disk, the header written and
+	synced again - the file becomes recognizable as an ecc file
+	only once it is complete. */
+
+   if(Closure->eccTarget == ECC_FILE)
+   {  guint64 expected = 2048*lay->sectorsPerLayer;
+      int k, n;
+
+      for(k=0; k<lay->nroots; k++)
+	 if(ec->parityBytes[k] != expected)
+	    Stop(_("Ecc file incomplete: root %d carries %" PRId64
+		   " of %" PRId64 " bytes"),
+		 k, ec->parityBytes[k], expected);
+
+      if(ec->crcBytes != expected)
+	 Stop(_("Ecc file incomplete: CRC layer carries %" PRId64
+		" of %" PRId64 " bytes"),
+	      ec->crcBytes, expected);
+
+      if(!LargeSync(image->eccFile))
+	 Stop(_("Failed syncing the ecc file: %s\n"), strerror(errno));
+
+      if(!LargeSeek(image->eccFile, 0))
+	 Stop(_("Failed seeking in the ecc file: %s\n"), strerror(errno));
+
+      n = LargeWrite(image->eccFile, ec->eh_le, 4096);
+      if(n != 4096)
+	 Stop(_("Failed writing the ecc header: %s\n"), strerror(errno));
+
+      if(!LargeSync(image->eccFile))
+	 Stop(_("Failed syncing the ecc file: %s\n"), strerror(errno));
+   }
 
    /*** Summarize */
 
@@ -1729,8 +1817,10 @@ void RS03Create(void)
 
    elapsed=g_timer_elapsed(ec->avgTimer, &ignore);
    mbs = ((double)lay->ndata*lay->sectorsPerLayer)/(512.0*elapsed);
-   PrintLog(_("Avg performance: %5.2fs (%5.2fMiB/s) total\n"), 
+   PrintLog(_("Avg performance: %5.2fs (%5.2fMiB/s) total\n"),
 	    elapsed, mbs);
+
+   report_timing(ec);
 
    GuiSetLabelText(wl->encPerformance, _("%5.2fMiB/s average"), mbs);
    GuiSetLabelText(ec->wl->encBottleneck, 

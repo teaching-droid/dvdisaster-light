@@ -21,11 +21,14 @@ Removed:
 * the GTK user interface; this fork is a command line tool (a graphical front end may ship later as a separate program)
 * the adaptive reading strategy
 
-Planned (see the version number: this is an early release of a larger plan):
+Added by the fork:
 
-* an **OpenCL RS03 encoder** with a GPU device selector and CPU fallback
-* an AVX2 CPU path next to the existing SSE2 one
-* Windows 7 SP1 and newer remain supported
+* an **OpenCL GPU encoder** for RS03 with device selection: `--encoding-device auto|cpu|gpu[:n]|list`. The default picks the strongest GPU and silently falls back to the CPU when no OpenCL driver is present; any vendor's driver works.
+* an **AVX2** CPU encoder next to the SSE2 one (chosen automatically at run time)
+* encoding starts instantly and writes far less: ecc files are no longer pre-written with placeholder sectors, and parity is written in large batched runs
+* a pipeline timing breakdown under `--verbose`
+* a GPU parity gate (`regtest/gpu-parity.bash`) that verifies every GPU device produces bit-identical output to the CPU encoders
+* Windows 7 SP1 and newer remain supported (audited automatically in CI)
 
 ## Compatibility promise
 
@@ -51,6 +54,17 @@ pacman -S --needed git diffutils make pkg-config mingw-w64-x86_64-glib2 mingw-w6
 ```
 
 Run the regression tests with `cd regtest && ./runtests.sh` (needs `/var/tmp/regtest` to exist).
+
+## Performance
+
+Numbers from one sample system (a desktop 8 core CPU, a current discrete NVIDIA GPU, NVMe storage); absolute values will differ on other machines:
+
+| Workload | dvdisaster Light 0.1.0 (CPU) | current (CPU) | current (GPU) |
+|----------|------------------------------|---------------|---------------|
+| 42 GB image, 32 roots (14.3%) | about 7 minutes | 56 s | 27 s |
+| 2 GB image, 170 roots (200%) | 17 s | 4.2 s | 3.2 s |
+
+Two practical tips: write the error correction file to a **different drive** than the one holding the image (reading and writing then do not compete for the same device), and let the automatic device selection do its work; forcing a device is only needed for testing.
 
 ## Credits and license
 

@@ -21,11 +21,14 @@ Rimosso:
 * l'interfaccia GTK; questo fork è uno strumento a riga di comando (un'interfaccia grafica potrà arrivare in seguito come programma separato)
 * la strategia di lettura adattiva
 
-In programma (il numero di versione lo dice: questa è una prima uscita di un piano più ampio):
+Aggiunto dal fork:
 
-* un **codificatore RS03 OpenCL** con selezione della GPU e ripiego su CPU
-* un percorso CPU AVX2 accanto a quello SSE2 esistente
-* Windows 7 SP1 e successivi restano supportati
+* un **codificatore GPU OpenCL** per RS03 con selezione del dispositivo: `--encoding-device auto|cpu|gpu[:n]|list`. L'impostazione predefinita sceglie la GPU più potente e ripiega silenziosamente sulla CPU se manca un driver OpenCL; funzionano i driver di qualunque produttore.
+* un codificatore CPU **AVX2** accanto a quello SSE2 (scelto automaticamente a runtime)
+* la codifica parte all'istante e scrive molto meno: i file di correzione non vengono più pre-scritti con settori segnaposto, e la parità viene scritta in grandi blocchi
+* una ripartizione dei tempi della pipeline con `--verbose`
+* un controllo di parità GPU (`regtest/gpu-parity.bash`) che verifica per ogni dispositivo GPU l'identità bit per bit con i codificatori CPU
+* Windows 7 SP1 e successivi restano supportati (verificato automaticamente nella CI)
 
 ## Promessa di compatibilità
 
@@ -51,6 +54,17 @@ pacman -S --needed git diffutils make pkg-config mingw-w64-x86_64-glib2 mingw-w6
 ```
 
 Test di regressione: `cd regtest && ./runtests.sh` (la directory `/var/tmp/regtest` deve esistere).
+
+## Prestazioni
+
+Valori misurati su un sistema campione (CPU desktop a 8 core, GPU NVIDIA dedicata recente, archiviazione NVMe); i valori assoluti variano da macchina a macchina:
+
+| Carico di lavoro | dvdisaster Light 0.1.0 (CPU) | attuale (CPU) | attuale (GPU) |
+|------------------|------------------------------|---------------|---------------|
+| immagine da 42 GB, 32 radici (14,3%) | circa 7 minuti | 56 s | 27 s |
+| immagine da 2 GB, 170 radici (200%) | 17 s | 4,2 s | 3,2 s |
+
+Due consigli pratici: scrivere il file di correzione su un **disco diverso** da quello dell'immagine (lettura e scrittura non competono così per lo stesso dispositivo), e lasciare lavorare la selezione automatica del dispositivo; forzarne uno serve solo per i test.
 
 ## Riconoscimenti e licenza
 
