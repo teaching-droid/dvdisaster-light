@@ -36,7 +36,7 @@ I file e le immagini aumentate prodotti da dvdisaster Light sono **identici bit 
 
 ## Schema delle versioni
 
-`dvdisaster Light 0.1.0 (based on dvdisaster 0.79.10-pl6)`: la versione Light conta le uscite di questo fork; la versione base indica lo stato esatto del progetto originale da cui deriva il codec. I campi di versione nel formato dei file restano legati alla versione base, così le altre versioni di dvdisaster interpretano correttamente i file.
+`dvdisaster Light 0.2.0 (based on dvdisaster 0.79.10-pl6)`: la versione Light conta le uscite di questo fork; la versione base indica lo stato esatto del progetto originale da cui deriva il codec. I campi di versione nel formato dei file restano legati alla versione base, così le altre versioni di dvdisaster interpretano correttamente i file.
 
 ## Compilazione
 

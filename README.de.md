@@ -36,7 +36,7 @@ Dateien und erweiterte Abbilder aus dvdisaster Light sind bei gleichen Eingaben 
 
 ## Versionsschema
 
-`dvdisaster Light 0.1.0 (based on dvdisaster 0.79.10-pl6)`: die Light-Version zählt die Ausgaben dieses Forks; die Basis-Version benennt den exakten Original-Stand, von dem der Codec abstammt. Die Versionsfelder im Dateiformat bleiben an die Basis-Version gebunden, damit andere dvdisaster-Versionen die Dateien korrekt einordnen.
+`dvdisaster Light 0.2.0 (based on dvdisaster 0.79.10-pl6)`: die Light-Version zählt die Ausgaben dieses Forks; die Basis-Version benennt den exakten Original-Stand, von dem der Codec abstammt. Die Versionsfelder im Dateiformat bleiben an die Basis-Version gebunden, damit andere dvdisaster-Versionen die Dateien korrekt einordnen.
 
 ## Bauen
 
