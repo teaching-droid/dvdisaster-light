@@ -225,6 +225,12 @@ static int cl_enumerate(cl_device_id *devices, char names[][128], int max)
    return count;
 }
 
+int CLDevicePresent(void)
+{  cl_device_id devices[CL_MAX_DEVICES];
+
+   return cl_enumerate(devices, NULL, CL_MAX_DEVICES) > 0;
+}
+
 void CLListDevices(void)
 {  cl_device_id devices[CL_MAX_DEVICES];
    char names[CL_MAX_DEVICES][128];
@@ -246,44 +252,96 @@ void CLListDevices(void)
 /*
  * The encoder kernel. One work item per codeword column; private
  * rotating register; same tables and update rule as the CPU encoders.
+ *
+ * The code parameters (NROOTS, NDATA, SHIFTINIT, ...) are baked in as
+ * compile time constants when the kernel is built. For codes up to
+ * UNROLL_LIMIT roots the layer loop is peeled into groups of NROOTS
+ * steps: within a group the rotating shift value of every step is a
+ * compile time constant, so after unrolling every register index is
+ * static and the register lives in real registers instead of spilled
+ * scratch memory. Larger codes use the dynamic formulation. Both are
+ * the same operations in the same order, hence bit-identical.
  */
 
 static const char *cl_encoder_source =
+/* Two step variants: the unrolled path wants the inner loop unrolled
+   (all register indices become static); the dynamic path must NOT
+   unroll it - the register array lives on the stack there and the
+   unrolling only bloats the instruction stream. */
+"#define STEP_U(sh, layer) { \\\n"
+"   uchar fb = layers[(ulong)(layer)*columns + j] ^ reg[sh]; \\\n"
+"   if(fb) \\\n"
+"   {  int f = logtab[fb]; \\\n"
+"      __global const uchar *row = lut + (ulong)f*LUTSTRIDE + (NROOTS-1-(sh)); \\\n"
+"      __attribute__((opencl_unroll_hint)) \\\n"
+"      for(int p=0; p<NROOTS; p++) \\\n"
+"         reg[p] ^= row[p]; \\\n"
+"      reg[sh] = aloggp0[f]; \\\n"
+"   } \\\n"
+"   else reg[sh] = 0; }\n"
+"#define STEP_D(sh, layer) { \\\n"
+"   uchar fb = layers[(ulong)(layer)*columns + j] ^ reg[sh]; \\\n"
+"   if(fb) \\\n"
+"   {  int f = logtab[fb]; \\\n"
+"      __global const uchar *row = lut + (ulong)f*LUTSTRIDE + (NROOTS-1-(sh)); \\\n"
+"      for(int p=0; p<NROOTS; p++) \\\n"
+"         reg[p] ^= row[p]; \\\n"
+"      reg[sh] = aloggp0[f]; \\\n"
+"   } \\\n"
+"   else reg[sh] = 0; }\n"
+"\n"
 "__kernel void rs03_encode(__global const uchar *layers,\n"
 "                          __global uchar *parity,\n"
 "                          __global const uchar *lut,\n"
 "                          __global const uchar *logtab,\n"
 "                          __global const uchar *aloggp0,\n"
-"                          int ndata, int nroots, int lutstride,\n"
-"                          int shiftinit, ulong columns)\n"
+"                          ulong columns)\n"
 "{  ulong j = get_global_id(0);\n"
-"   uchar reg[176];\n"
-"   int t, p, sh;\n"
+"   uchar reg[NROOTS];\n"
+"   int p;\n"
 "\n"
 "   if(j >= columns) return;\n"
 "\n"
-"   for(p=0; p<nroots; p++) reg[p] = 0;\n"
-"   sh = shiftinit;\n"
+"   __attribute__((opencl_unroll_hint))\n"
+"   for(p=0; p<NROOTS; p++) reg[p] = 0;\n"
 "\n"
-"   for(t=0; t<ndata; t++)\n"
-"   {  uchar fb = layers[(ulong)t*columns + j] ^ reg[sh];\n"
+"#if UNROLL_GROUP\n"
+"   {  int t = 0;\n"
+"      int g;\n"
 "\n"
-"      if(fb)\n"
-"      {  int f = logtab[fb];\n"
-"         __global const uchar *row = lut + (ulong)f*lutstride + (nroots-1-sh);\n"
-"\n"
-"         for(p=0; p<nroots; p++)\n"
-"            reg[p] ^= row[p];\n"
-"         reg[sh] = aloggp0[f];\n"
+"      for(g=0; g<GROUPS; g++, t+=NROOTS)\n"
+"      {  __attribute__((opencl_unroll_hint))\n"
+"         for(int k=0; k<NROOTS; k++)\n"
+"         {  const int sh = (SHIFTINIT + k) % NROOTS;\n"
+"            STEP_U(sh, t+k);\n"
+"         }\n"
 "      }\n"
-"      else reg[sh] = 0;\n"
 "\n"
-"      sh++; if(sh >= nroots) sh = 0;\n"
+"      __attribute__((opencl_unroll_hint))\n"
+"      for(int k=0; k<TAIL; k++)\n"
+"      {  const int sh = (SHIFTINIT + k) % NROOTS;\n"
+"         STEP_U(sh, t+k);\n"
+"      }\n"
 "   }\n"
+"#else\n"
+"   {  int t, sh = SHIFTINIT;\n"
 "\n"
-"   for(p=0; p<nroots; p++)\n"
+"      for(t=0; t<NDATA; t++)\n"
+"      {  STEP_D(sh, t);\n"
+"         sh++; if(sh >= NROOTS) sh = 0;\n"
+"      }\n"
+"   }\n"
+"#endif\n"
+"\n"
+"   __attribute__((opencl_unroll_hint))\n"
+"   for(p=0; p<NROOTS; p++)\n"
 "      parity[(ulong)p*columns + j] = reg[p];\n"
 "}\n";
+
+/* Codes up to this many roots get the fully unrolled kernel; the
+   statement count grows with NROOTS squared, so cap it. */
+
+#define UNROLL_LIMIT 64
 
 struct _CLEncoder
 {  cl_context context;
@@ -395,7 +453,17 @@ CLEncoder* CLEncoderInit(ReedSolomonTables *rt, int ndata, guint64 maxColumns,
       return NULL;
    }
 
-   err = cl.BuildProgram(enc->program, 1, &dev, NULL, NULL, NULL);
+   {  char options[256];
+
+      g_snprintf(options, sizeof(options),
+		 "-DNROOTS=%d -DNDATA=%d -DSHIFTINIT=%d -DLUTSTRIDE=%d "
+		 "-DUNROLL_GROUP=%d -DGROUPS=%d -DTAIL=%d",
+		 nroots, ndata, rt->shiftInit, 2*nroots,
+		 nroots <= UNROLL_LIMIT ? 1 : 0,
+		 ndata/nroots, ndata%nroots);
+
+      err = cl.BuildProgram(enc->program, 1, &dev, options, NULL, NULL);
+   }
    if(err != CL_SUCCESS)
    {  char log[1024] = "";
       cl.GetProgramBuildInfo(enc->program, dev, CL_PROGRAM_BUILD_LOG, sizeof(log)-1, log, NULL);
@@ -453,34 +521,37 @@ buffer_failed:
 }
 
 /*
- * Encode one chunk: upload the ndata layer buffers, run the kernel.
- * The parity stays resident on the device until CLEncoderDownload().
+ * Upload one layer of the chunk (asynchronous; the host buffer must
+ * stay valid until CLEncoderRun returns).
  */
 
-int CLEncoderEncode(CLEncoder *enc, unsigned char **layers, guint64 columns)
+int CLEncoderUploadLayer(CLEncoder *enc, int layer, unsigned char *buf, guint64 columns)
+{  cl_int err;
+
+   err = cl.EnqueueWriteBuffer(enc->queue, enc->layersBuf, CL_NON_BLOCKING,
+			       (size_t)layer*columns, columns, buf, 0, NULL, NULL);
+   if(err != CL_SUCCESS)
+   {  Verbose("[OpenCL: layer upload failed (%d)]\n", err);
+      return FALSE;
+   }
+   return TRUE;
+}
+
+/*
+ * Run the kernel over the uploaded chunk. The parity stays resident
+ * on the device until CLEncoderDownload().
+ */
+
+int CLEncoderRun(CLEncoder *enc, guint64 columns)
 {  size_t global, local = 256;
    cl_int err;
-   int t;
-
-   for(t=0; t<enc->ndata; t++)
-   {  err = cl.EnqueueWriteBuffer(enc->queue, enc->layersBuf, CL_NON_BLOCKING,
-				  (size_t)t*columns, columns, layers[t], 0, NULL, NULL);
-      if(err != CL_SUCCESS)
-      {  Verbose("[OpenCL: layer upload failed (%d)]\n", err);
-	 return FALSE;
-      }
-   }
 
    err  = cl.SetKernelArg(enc->kernel, 0, sizeof(cl_mem), &enc->layersBuf);
    err |= cl.SetKernelArg(enc->kernel, 1, sizeof(cl_mem), &enc->parityBuf);
    err |= cl.SetKernelArg(enc->kernel, 2, sizeof(cl_mem), &enc->lutBuf);
    err |= cl.SetKernelArg(enc->kernel, 3, sizeof(cl_mem), &enc->logBuf);
    err |= cl.SetKernelArg(enc->kernel, 4, sizeof(cl_mem), &enc->alogBuf);
-   err |= cl.SetKernelArg(enc->kernel, 5, sizeof(cl_int), &enc->ndata);
-   err |= cl.SetKernelArg(enc->kernel, 6, sizeof(cl_int), &enc->nroots);
-   err |= cl.SetKernelArg(enc->kernel, 7, sizeof(cl_int), &enc->lutStride);
-   err |= cl.SetKernelArg(enc->kernel, 8, sizeof(cl_int), &enc->shiftInit);
-   err |= cl.SetKernelArg(enc->kernel, 9, sizeof(guint64), &columns);
+   err |= cl.SetKernelArg(enc->kernel, 5, sizeof(guint64), &columns);
    if(err != CL_SUCCESS)
    {  Verbose("[OpenCL: kernel argument setup failed (%d)]\n", err);
       return FALSE;

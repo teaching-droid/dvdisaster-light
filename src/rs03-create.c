@@ -123,7 +123,25 @@ typedef struct
 
    CLEncoder *gpu;          /* OpenCL encoder; NULL = encode on the CPU */
    int nThreads;            /* number of spawned encoder threads */
+
+   /* Pipeline timing accumulators (microseconds), reported under
+      --verbose. The *Wait* counters are the interesting ones: they
+      attribute idle time across the pipeline stages. */
+
+   gint64 tIoRead;          /* IO thread: reading data layer chunks */
+   gint64 tIoFlushParity;   /* IO thread: writing parity slices */
+   gint64 tIoFlushCrc;      /* IO thread: writing the CRC layer */
+   gint64 tIoWaitEnc;       /* IO thread idle: waiting for the encoder */
+   gint64 tGpuWaitWork;     /* GPU thread idle: waiting for input (IO read side) */
+   gint64 tGpuCrc;          /* GPU thread: parallel CRC pass */
+   gint64 tGpuUpload;       /* GPU thread: layer upload enqueue */
+   gint64 tGpuKernel;       /* GPU thread: kernel run incl. upload drain */
+   gint64 tGpuWaitSlices;   /* GPU thread idle: waiting for parity flush (IO write side) */
+   gint64 tGpuDownload;     /* GPU thread: parity download */
 } ecc_closure;
+
+#define TIMER_START(t0) gint64 t0 = g_get_monotonic_time()
+#define TIMER_ADD(acc, t0) (acc) += g_get_monotonic_time() - (t0)
 
 static void ecc_cleanup(gpointer data)
 {  ecc_closure *ec = (ecc_closure*)data;
@@ -726,10 +744,12 @@ static void read_next_chunk(ecc_closure *ec, guint64 chunk)
 static void flush_crc(ecc_closure *ec, LargeFile *file_out)
 {  RS03Layout *lay = ec->lay;
    gint64 crc_sect;
-   gint64 i;
+   gint64 bytes;
+   TIMER_START(t0);
 
-   /* Write out the CRC layer */
-      
+   /* Write out the CRC layer. The whole chunk is contiguous both in
+      memory and in the output file, so one write covers it. */
+
    verbose("%s", "IO: writing CRC layer\n");
    crc_sect = 2048*(ec->encoderChunk+lay->firstCrcPos);
    if(!LargeSeek(file_out, crc_sect))
@@ -737,38 +757,41 @@ static void flush_crc(ecc_closure *ec, LargeFile *file_out)
 
       Stop(_("Failed seeking to sector %" PRId64 " in image: %s"), crc_sect, strerror(errno));
    }
-   for(i=0; i<ec->encoderLayerSectors; i++)
-      if(LargeWrite(file_out, ec->encoderCrc+512*i, 2048) != 2048)
-      {  ec->abortImmediately = TRUE;
-	 Stop(_("Failed writing to sector %" PRId64 " in image: %s"), crc_sect, strerror(errno));
-      }
+   bytes = 2048*ec->encoderLayerSectors;
+   if(LargeWrite(file_out, ec->encoderCrc, bytes) != bytes)
+   {  ec->abortImmediately = TRUE;
+      Stop(_("Failed writing to sector %" PRId64 " in image: %s"), crc_sect, strerror(errno));
+   }
+
+   TIMER_ADD(ec->tIoFlushCrc, t0);
 }
 
 static void flush_parity(ecc_closure *ec, LargeFile *file_out)
 {  RS03Layout *lay = ec->lay;
-   gint64 i;
    int k;
+   TIMER_START(t0);
 
-   /* Write out the created parity. */
+   /* Write out the created parity. A root's sectors within a chunk
+      are contiguous in the output file for both targets, so each root
+      needs exactly one seek and one write instead of one per sector. */
 
    verbose("%s", "IO: writing parity...\n");
    for(k=0; k<lay->nroots; k++)
-   {  gint64 idx=0;
+   {  gint64 s = RS03SectorIndex(lay, k+lay->ndata, ec->flushChunk);
+      gint64 bytes = 2048*ec->flushLayerSectors;
 
-      for(i=0; i<ec->flushLayerSectors; i++, idx+=2048)
-      {  gint64 s = RS03SectorIndex(lay, k+lay->ndata, ec->flushChunk+i);
-	
-	 if(!LargeSeek(file_out, 2048*s))
-	 {  ec->abortImmediately = TRUE;
-	    Stop(_("Failed seeking to sector %" PRId64 " in image: %s"), s, strerror(errno));
-	 }
-	 if(LargeWrite(file_out, ec->slice[k]+idx, 2048) != 2048)
-	 {  ec->abortImmediately = TRUE;
-	    Stop(_("Failed writing to sector %" PRId64 " in image: %s"), s, strerror(errno));
-	 }
+      if(!LargeSeek(file_out, 2048*s))
+      {  ec->abortImmediately = TRUE;
+	 Stop(_("Failed seeking to sector %" PRId64 " in image: %s"), s, strerror(errno));
+      }
+      if(LargeWrite(file_out, ec->slice[k], bytes) != bytes)
+      {  ec->abortImmediately = TRUE;
+	 Stop(_("Failed writing to sector %" PRId64 " in image: %s"), s, strerror(errno));
       }
    }
    verbose("%s", "IO: parity written.\n");
+
+   TIMER_ADD(ec->tIoFlushParity, t0);
 }
 
 static gpointer io_thread(ecc_closure *ec)
@@ -848,7 +871,9 @@ static gpointer io_thread(ecc_closure *ec)
       /* preload first chunk */
 
       if(needs_preload)
-      {  read_next_chunk(ec, chunk);
+      {  TIMER_START(tRead);
+	 read_next_chunk(ec, chunk);
+	 TIMER_ADD(ec->tIoRead, tRead);
 	 //	 flush_crc(ec, file_out);  // FIXME
 	 needs_preload = 0;
 	 verbose("%s", "IO: first chunk loaded\n");
@@ -884,7 +909,10 @@ static gpointer io_thread(ecc_closure *ec)
 
       /* Read the next chunk while encoders are working */
 
-      read_next_chunk(ec, chunk);
+      {  TIMER_START(tRead);
+	 read_next_chunk(ec, chunk);
+	 TIMER_ADD(ec->tIoRead, tRead);
+      }
       //      flush_crc(ec, file_out);  // FIXME
 
       /* Remember the current portion for writing it out */
@@ -897,9 +925,12 @@ static gpointer io_thread(ecc_closure *ec)
 
       g_mutex_lock(ec->lock);
       cpu_bound = ec->buffersToEncode;
-      while(ec->buffersToEncode)
-      {  verbose("%s", "IO: Waiting for encoders to finish\n");
-	 g_cond_wait(ec->ioCond, ec->lock);
+      {  TIMER_START(tWait);
+	 while(ec->buffersToEncode)
+	 {  verbose("%s", "IO: Waiting for encoders to finish\n");
+	    g_cond_wait(ec->ioCond, ec->lock);
+	 }
+	 TIMER_ADD(ec->tIoWaitEnc, tWait);
       }
       g_mutex_unlock(ec->lock);
 
@@ -937,9 +968,12 @@ static gpointer io_thread(ecc_closure *ec)
    g_mutex_lock(ec->lock);
    ec->slicesFree = TRUE;  /* we have saved the slices; go ahead */
    g_cond_broadcast(ec->ioCond);
-   while(ec->buffersToEncode)
-   {  verbose("%s", "IO: Waiting for encoders to finish last chunk\n");
-      g_cond_wait(ec->ioCond, ec->lock);
+   {  TIMER_START(tWait);
+      while(ec->buffersToEncode)
+      {  verbose("%s", "IO: Waiting for encoders to finish last chunk\n");
+	 g_cond_wait(ec->ioCond, ec->lock);
+      }
+      TIMER_ADD(ec->tIoWaitEnc, tWait);
    }
    g_mutex_unlock(ec->lock);
 
@@ -1148,6 +1182,45 @@ static gpointer encoder_thread(ecc_closure *ec)
 }
 
 /*
+ * Parallel CRC helper for the GPU path: computes the chained CRC sums
+ * and the CRC metadata block for a range of columns. Same semantics as
+ * the per column loop in encoder_thread, except that firstCrc[] is
+ * pre-filled by the driver before the workers start (so the wrap
+ * around read in a single chunk image cannot race the write).
+ */
+
+typedef struct
+{  ecc_closure *ec;
+   guint64 from, to;    /* column range [from, to) within the chunk */
+} crc_range;
+
+static gpointer crc_worker(crc_range *cr)
+{  ecc_closure *ec = cr->ec;
+   int ndata = ec->lay->ndata;
+   guint64 layer_offset;
+   int layer;
+
+   for(layer_offset=cr->from; layer_offset<cr->to; layer_offset++)
+   {  for(layer=0; layer<ndata-1; layer++)
+      {  unsigned char *data = ec->encoderData[layer] + 2048*layer_offset;
+
+	 /* Chain back CRC sums from next sector into current one */
+
+	 if(ec->encoderChunk+layer_offset < ec->lay->sectorsPerLayer-1)
+	 {  ec->encoderCrc[512*layer_offset+layer] = Crc32(data+2048, 2048);
+	 }
+	 else /* wrap-around: fill in CRCs from first ecc block */
+	 {  ec->encoderCrc[512*layer_offset+layer] = ec->firstCrc[layer];
+	 }
+      }
+
+      prepare_crc_block(ec, (CrcBlock*)&ec->encoderCrc[512*layer_offset]);
+   }
+
+   return NULL;
+}
+
+/*
  * The GPU driver thread. Replaces the whole CPU worker pool: it claims
  * every column of a chunk at once, runs the CRC pass on the CPU (the
  * CRC layer participates in the parity and must be final before the
@@ -1155,13 +1228,17 @@ static gpointer encoder_thread(ecc_closure *ec)
  * downloads the parity planes straight into the output slices. The
  * locking protocol towards the IO thread is identical to the one in
  * encoder_thread().
+ *
+ * Pipeline overlap: the data layers are final as soon as the chunk is
+ * handed over, so their uploads are enqueued first and run while the
+ * CPU computes the CRC layer (in parallel worker threads); only the
+ * CRC layer's upload has to wait for that pass.
  */
 
 static gpointer gpu_encoder_thread(ecc_closure *ec)
 {  int ndata  = ec->lay->ndata;
    int percent;
    guint64 layerSectors;
-   guint64 layer_offset;
    int layer;
 
    verbose("%s", "ENC: GPU encoder thread initialized.\n");
@@ -1169,11 +1246,14 @@ static gpointer gpu_encoder_thread(ecc_closure *ec)
    for(;;)
    {
       g_mutex_lock(ec->lock);
-      while(   ec->sectorsToEncode
-	    && !ec->abortImmediately
-	    && ec->nextBufferIndex >= ec->encoderLayerSectors)
-      {  verbose("%s", "ENC: GPU encoder waiting for work\n");
-	 g_cond_wait(ec->ioCond, ec->lock);
+      {  TIMER_START(tWait);
+	 while(   ec->sectorsToEncode
+	       && !ec->abortImmediately
+	       && ec->nextBufferIndex >= ec->encoderLayerSectors)
+	 {  verbose("%s", "ENC: GPU encoder waiting for work\n");
+	    g_cond_wait(ec->ioCond, ec->lock);
+	 }
+	 TIMER_ADD(ec->tGpuWaitWork, tWait);
       }
 
       /* Termination criterion */
@@ -1193,58 +1273,90 @@ static gpointer gpu_encoder_thread(ecc_closure *ec)
       verbose("ENC: GPU encoder got chunk %" PRId64 " (%" PRId64 " sectors)\n",
 	      ec->encoderChunk, layerSectors);
 
-      /* CRC pass over all columns of the chunk (same semantics as the
-	 per column loop in encoder_thread) */
+      /* The data layers are already final: start their uploads so the
+	 DMA overlaps the CRC pass below */
 
-      for(layer_offset=0; layer_offset<layerSectors; layer_offset++)
-      {  for(layer=0; layer<ndata-1; layer++)
-	 {  unsigned char *data = ec->encoderData[layer] + 2048*layer_offset;
-
-	    /* The first ecc block CRC needs to be cached for wrap-around */
-
-	    if(!ec->encoderChunk && !layer_offset)
-	    {  ec->firstCrc[layer] = Crc32(data, 2048);
-	    }
-
-	    /* Chain back CRC sums from next sector into current one */
-
-	    if(ec->encoderChunk+layer_offset < ec->lay->sectorsPerLayer-1)
-	    {  ec->encoderCrc[512*layer_offset+layer] = Crc32(data+2048, 2048);
-	    }
-	    else /* wrap-around: fill in CRCs from first ecc block */
-	    {  ec->encoderCrc[512*layer_offset+layer] = ec->firstCrc[layer];
-	    }
-	 }
-
-	 prepare_crc_block(ec, (CrcBlock*)&ec->encoderCrc[512*layer_offset]);
+      {  TIMER_START(tUp);
+	 for(layer=0; layer<ndata-1; layer++)
+	    if(!CLEncoderUploadLayer(ec->gpu, layer, ec->encoderData[layer], 2048*layerSectors))
+	       goto gpu_failed;
+	 TIMER_ADD(ec->tGpuUpload, tUp);
       }
 
-      /* Upload the layers and compute the parity on the device */
+      /* The first ecc block CRCs need to be cached for wrap-around;
+	 fill them before the workers start so the wrap-around read in
+	 a single chunk image cannot race the write */
 
-      if(!CLEncoderEncode(ec->gpu, ec->encoderData, 2048*layerSectors))
-      {  ec->abortImmediately = TRUE;
-	 Stop(_("GPU encoding failed; see --verbose output. "
-		"Re-run with --encoding-device cpu."));
-	 return NULL;
+      if(!ec->encoderChunk)
+	 for(layer=0; layer<ndata-1; layer++)
+	    ec->firstCrc[layer] = Crc32(ec->encoderData[layer], 2048);
+
+      /* CRC pass over all columns of the chunk, split across the
+	 configured number of threads */
+
+      {  TIMER_START(tCrc);
+	 crc_range range[MAX_CODEC_THREADS];
+	 GThread *crcThread[MAX_CODEC_THREADS];
+	 int nw = Closure->codecThreads;
+	 guint64 per;
+	 int w;
+
+	 if((guint64)nw > layerSectors) nw = layerSectors;
+	 per = layerSectors / nw;
+
+	 for(w=0; w<nw; w++)
+	 {  range[w].ec = ec;
+	    range[w].from = w*per;
+	    range[w].to = (w == nw-1) ? layerSectors : (w+1)*per;
+	 }
+
+	 for(w=1; w<nw; w++)
+	    crcThread[w] = g_thread_new("crc", (GThreadFunc)crc_worker, &range[w]);
+	 crc_worker(&range[0]);
+	 for(w=1; w<nw; w++)
+	    g_thread_join(crcThread[w]);
+	 TIMER_ADD(ec->tGpuCrc, tCrc);
+      }
+
+      /* Now the CRC layer is final too: upload it and run the kernel */
+
+      if(!CLEncoderUploadLayer(ec->gpu, ndata-1, ec->encoderData[ndata-1], 2048*layerSectors))
+	 goto gpu_failed;
+
+      {  TIMER_START(tKrn);
+	 if(!CLEncoderRun(ec->gpu, 2048*layerSectors))
+	 {  gpu_failed:
+	    ec->abortImmediately = TRUE;
+	    Stop(_("GPU encoding failed; see --verbose output. "
+		   "Re-run with --encoding-device cpu."));
+	    return NULL;
+	 }
+	 TIMER_ADD(ec->tGpuKernel, tKrn);
       }
 
       /* Wait until the IO thread has flushed the previous slices,
 	 then download the parity planes into them */
 
       g_mutex_lock(ec->lock);
-      while(!ec->slicesFree && !ec->abortImmediately)
-      {  g_cond_wait(ec->ioCond, ec->lock);
+      {  TIMER_START(tWait);
+	 while(!ec->slicesFree && !ec->abortImmediately)
+	 {  g_cond_wait(ec->ioCond, ec->lock);
+	 }
+	 TIMER_ADD(ec->tGpuWaitSlices, tWait);
       }
       g_mutex_unlock(ec->lock);
 
       if(ec->abortImmediately)
 	 return NULL;
 
-      if(!CLEncoderDownload(ec->gpu, ec->slice, 2048*layerSectors))
-      {  ec->abortImmediately = TRUE;
-	 Stop(_("GPU parity download failed; see --verbose output. "
-		"Re-run with --encoding-device cpu."));
-	 return NULL;
+      {  TIMER_START(tDown);
+	 if(!CLEncoderDownload(ec->gpu, ec->slice, 2048*layerSectors))
+	 {  ec->abortImmediately = TRUE;
+	    Stop(_("GPU parity download failed; see --verbose output. "
+		   "Re-run with --encoding-device cpu."));
+	    return NULL;
+	 }
+	 TIMER_ADD(ec->tGpuDownload, tDown);
       }
 
       /* Progress and completion bookkeeping */
@@ -1315,6 +1427,18 @@ static void create_reed_solomon(ecc_closure *ec)
 	So we need to buffer 2048*Closure->prefetchSectors of input data.
 	For practical reasons we require that the layer size is a multiple of the
 	medium sector size of 2048 bytes. */
+
+   /* GPU encoding profits greatly from larger chunks (fewer, bigger
+      kernel launches and transfers). When the GPU may be used and the
+      user has not chosen a chunk size, raise the default. */
+
+   if(   !Closure->prefetchSet
+      && Closure->prefetchSectors < 512
+      && (   Closure->clDeviceMode == CL_DEVICE_MODE_GPU
+	  || (   Closure->clDeviceMode == CL_DEVICE_MODE_AUTO
+	      && Closure->encodingAlgorithm == ENCODING_ALG_DEFAULT))
+      && CLDevicePresent())
+      Closure->prefetchSectors = 512;
 
    ec->chunkBytes  = 2048*Closure->prefetchSectors;
    ec->chunkSize   = Closure->prefetchSectors;
@@ -1391,16 +1515,37 @@ static void create_reed_solomon(ecc_closure *ec)
 
    /*** Now we actually become being the IO thread */
 
-   io_thread(ec);
+   {  TIMER_START(tWall);
 
-   /*** Wait for workers to finish */
+      io_thread(ec);
 
-   for(i=0; i<ec->nThreads; i++)
-   {  g_thread_join(ec->thread[i]);
-      verbose("SCHED: joined with worker %d\n", i);
-      fflush(stdout);
+      /*** Wait for workers to finish */
+
+      for(i=0; i<ec->nThreads; i++)
+      {  g_thread_join(ec->thread[i]);
+	 verbose("SCHED: joined with worker %d\n", i);
+	 fflush(stdout);
+      }
+      verbose("%s", "SCHED: scheduler finished.\n");
+
+      /*** Report the pipeline timing breakdown */
+
+      {  double wall = (g_get_monotonic_time() - tWall)/1000000.0;
+
+	 Verbose("[timing] wall %.1fs\n", wall);
+	 Verbose("[timing] io: read %.1fs, write parity %.1fs, write crc %.1fs, "
+		 "idle waiting for encoder %.1fs\n",
+		 ec->tIoRead/1000000.0, ec->tIoFlushParity/1000000.0,
+		 ec->tIoFlushCrc/1000000.0, ec->tIoWaitEnc/1000000.0);
+	 if(ec->gpu)
+	    Verbose("[timing] gpu: crc %.1fs, upload %.1fs, kernel %.1fs, "
+		    "download %.1fs, idle waiting for input %.1fs, "
+		    "idle waiting for flush %.1fs\n",
+		    ec->tGpuCrc/1000000.0, ec->tGpuUpload/1000000.0,
+		    ec->tGpuKernel/1000000.0, ec->tGpuDownload/1000000.0,
+		    ec->tGpuWaitWork/1000000.0, ec->tGpuWaitSlices/1000000.0);
+      }
    }
-   verbose("%s", "SCHED: scheduler finished.\n");
 }
 
 /***

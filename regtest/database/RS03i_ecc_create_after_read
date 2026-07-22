@@ -814,7 +814,6 @@ nroots            = 39 (18.1%)
 *          the expected data loss protection.
 CrcBufValid: buffer VALID
 CrcBuf present, augmented image: using data MD5 sum
-Cache allocation: 110592K+12288K+9984K=129M (data+parity+descrambling)
 Image has been augmented with error correction data.
 New image size is 48 MiB (24990 sectors).
 FreeCrcBuf - buffer cleared

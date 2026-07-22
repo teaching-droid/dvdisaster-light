@@ -381,6 +381,23 @@ function run_regtest()
          grep -Eva '^\[OpenCL' $NEWLOG >$TMPLOG
          mv $TMPLOG $NEWLOG
 
+         # ignore the fork's own copyright line: golden logs predate it
+         # and it changes with the year
+
+         grep -va '^Copyright 2026 The dvdisaster Light contributors.' $NEWLOG >$TMPLOG
+         mv $TMPLOG $NEWLOG
+
+         # ignore the cache allocation line: it depends on the chunk
+         # size, which the GPU auto tuning raises on machines with GPUs
+
+         grep -va '^Cache allocation:' $NEWLOG >$TMPLOG
+         mv $TMPLOG $NEWLOG
+
+         # ignore the pipeline timing report: machine dependent
+
+         grep -Eva '^\[timing' $NEWLOG >$TMPLOG
+         mv $TMPLOG $NEWLOG
+
          # ignore log lines specified by user
 
          if test -n "$IGNORE_LOG_LINE"; then
