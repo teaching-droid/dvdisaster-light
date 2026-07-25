@@ -266,6 +266,7 @@ typedef struct _GlobalClosure
    int encodingAlgorithm; /* Force a certain codec type for RS03 */
    int encodingIOStrategy; /* Force a IO strategy for RS03 encoding */
    int sectorSkip;      /* Number of sectors to skip after read error occurs */
+   int reverse;         /* read the medium from the end towards the start */
    char *redundancy;    /* Error correction code redundancy */
    int eccTarget;       /* 0=file; 1=augmented image */
    int readRaw;         /* Read CD sectors raw + verify them */

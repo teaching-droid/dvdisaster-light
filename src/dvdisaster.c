@@ -272,6 +272,7 @@ int main(int argc, char *argv[])
 	{"read-sector", 1, 0, MODE_READ_SECTOR},
 	{"read-raw", 0, 0, MODIFIER_READ_RAW},
 	{"regtest", 0, 0, MODIFIER_REGTEST},
+	{"reverse", 0, 0, 'R'},
 	{"redundancy", 1, 0, 'n'},
 	{"resource-file", 1, 0, MODIFIER_RESOURCE_FILE},
 	{"scan", 2, 0,'s'},
@@ -296,7 +297,7 @@ int main(int argc, char *argv[])
       };
 
       c = getopt_long(argc, argv, 
-		      "a:cd:e:fhi:j:lm::n:o:p:r::s::t::uvx:z",
+		      "a:cd:e:fhi:j:lm::n:o:p:r::s::t::uvx:zR",
 		      long_options, &option_index);
 
       if(c == -1) break;
@@ -326,6 +327,7 @@ int main(int argc, char *argv[])
 		      Closure->imageName = g_strdup(optarg); 
 		   }
 	           break;
+         case 'R': Closure->reverse = TRUE; break;
          case 'j': if(optarg) Closure->sectorSkip = atoi(optarg) & ~0xf;
 	           if(Closure->sectorSkip<0) Closure->sectorSkip = 0;
 		   break;
@@ -1001,6 +1003,7 @@ int main(int argc, char *argv[])
       PrintCLI(_("Tweaking options (see manual before using!)\n"));
       PrintCLI(_("  -a, --assume x             - assume image is augmented with given codec (RS03)\n"));
       PrintCLI(_("  -j, --jump n               - jump n sectors forward after a read error (default: 16)\n"));
+      PrintCLI(_("  -R, --reverse              - read the medium from the end towards the start\n"));
       PrintCLI(_("  -m, --method x             - list/select error correction methods (default: RS03)\n"));
       PrintCLI(_("  -n, --redundancy x         - error correction data redundancy\n"
 		 "                               e.g. 20%%, 32r (roots), 200m (MiB), normal, high\n"

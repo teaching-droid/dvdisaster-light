@@ -444,6 +444,41 @@ static void fill_gap(read_closure *rc)
 }
 
 /*
+ * Reverse reading needs the image to be full size with a dead sector marker
+ * wherever no real data is present yet, so that descending writes never leave
+ * sparse-zero holes (which would be misread as data on resume) and so an
+ * interrupted reverse pass resumes correctly. Fill [readMarker, lastSector]
+ * with dead markers and advance the marker to the medium end.
+ * Must be called before the worker thread starts (direct writerImage access).
+ */
+
+static void fill_to_end(read_closure *rc)
+{  gint64 s;
+   unsigned char buf[2048];
+
+   if(rc->scanMode || rc->readMarker > rc->lastSector)
+      return;
+
+   s = rc->readMarker;
+   if(!LargeSeek(rc->writerImage, (gint64)(2048*s)))
+      Stop(_("Failed seeking to sector %" PRId64 " in image [%s]: %s"),
+	   s, "fill-end", strerror(errno));
+
+   while(s <= rc->lastSector)
+   {  int n;
+
+      CreateMissingSector(buf, s, rc->image->imageFP, FINGERPRINT_SECTOR, rc->volumeLabel);
+      n = LargeWrite(rc->writerImage, buf, 2048);
+      if(n != 2048)
+	Stop(_("Failed writing to sector %" PRId64 " in image [%s]: %s"),
+	     s, "fill-end", strerror(errno));
+      s++;
+   }
+
+   rc->readMarker = rc->lastSector + 1;
+}
+
+/*
  * Allocate memory for CRC32 sums and preload the cache.
  */
 
@@ -787,6 +822,117 @@ static void insert_buttons(GtkDialog *dialog)
 } 
 #endif
 
+/*
+ * Reverse reading pass: visit the medium from the last sector down to the
+ * first, one sector at a time, re-reading only sectors that are not already
+ * present in the image. This recovers boundary sectors a forward read
+ * overshoots and lets a drive that tracks better in one direction have a go
+ * from the other side. It reuses the worker queue, the dead-sector marker
+ * writer and the progress display. The image has already been completed with
+ * dead markers by fill_to_end(), so a skip means "real data present here".
+ * Not cluster-fast on purpose: reverse is a recovery pass, not the bulk pass.
+ */
+
+static void read_reverse(read_closure *rc)
+{  int status, n;
+
+   rc->readPos = rc->lastSector;
+   rc->lastErrorsPrinted = 0;
+   rc->previousReadErrors = rc->previousCRCErrors = 0;
+   rc->firstSpeedValue = TRUE;
+
+   while(rc->readPos >= rc->firstSector)
+   {
+      if(Closure->stopActions)   /* somebody hit the Stop button */
+      {  rc->unreportedError = FALSE;
+	 return;
+      }
+
+      /*** Skip sectors that are already present (real data) in the image. */
+
+      {  unsigned char sector_buf[2048];
+	 int err;
+
+	 if(!LargeSeek(rc->readerImage, (gint64)(2048*rc->readPos)))
+	    Stop(_("Failed seeking to sector %" PRId64 " in image [%s]: %s"),
+		 rc->readPos, "reverse", strerror(errno));
+	 n = LargeRead(rc->readerImage, sector_buf, 2048);
+	 if(n == 2048)
+	 {  err = CheckForMissingSector(sector_buf, rc->readPos,
+					rc->image->fpState == 2 ? rc->image->imageFP : NULL,
+					rc->image->fpSector);
+	    if(err == SECTOR_PRESENT)
+	       goto rev_step;   /* already have it */
+	 }
+      }
+
+      /*** Wait for a free buffer, then read one sector from the drive. */
+
+      g_mutex_lock(rc->mutex);
+      if(rc->workerError)
+      {  g_mutex_unlock(rc->mutex);
+	 Stop("%s", rc->workerError);
+      }
+      while(rc->bufState[rc->readPtr] != BUF_EMPTY)
+	 g_cond_wait(rc->canRead, rc->mutex);
+      g_mutex_unlock(rc->mutex);
+
+      status = ReadSectors(rc->image->dh, rc->alignedBuf[rc->readPtr]->buf, rc->readPos, 1);
+
+      /*** Non medium-error / illegal-request sense is fatal (mirror forward path). */
+
+      if(status && !Closure->ignoreFatalSense
+	 && rc->image->dh->sense.sense_key
+	 && rc->image->dh->sense.sense_key != 3 && rc->image->dh->sense.sense_key != 5)
+      {  if(!Closure->guiMode)
+	    Stop(_("Sector %" PRId64 ": %s\nCan not recover from above error.\n"
+		   "Use the --ignore-fatal-sense option to override."),
+		 rc->readPos, GetLastSenseString(FALSE));
+      }
+
+      if(!status)   /* good read: hand the sector to the worker to store */
+      {  g_mutex_lock(rc->mutex);
+	 rc->bufferedSector[rc->readPtr] = rc->readPos;
+	 rc->nSectors[rc->readPtr] = 1;
+	 rc->bufState[rc->readPtr] = BUF_FULL;
+	 rc->readPtr++;
+	 if(rc->readPtr >= READ_BUFFERS)
+	    rc->readPtr = 0;
+	 g_cond_signal(rc->canWrite);
+	 g_mutex_unlock(rc->mutex);
+	 rc->readOK++;
+      }
+      else          /* read failed: keep a dead sector marker so it is tried again */
+      {  PrintCLIorLabel(Closure->status, _("Sector %" PRId64 ": %s\n"),
+			  rc->readPos, GetLastSenseString(FALSE));
+
+	 g_mutex_lock(rc->mutex);
+	 if(rc->workerError)
+	 {  g_mutex_unlock(rc->mutex);
+	    Stop("%s", rc->workerError);
+	 }
+	 while(rc->bufState[rc->readPtr] != BUF_EMPTY)
+	    g_cond_wait(rc->canRead, rc->mutex);
+
+	 CreateMissingSector(rc->alignedBuf[rc->readPtr]->buf, rc->readPos,
+			     rc->image->imageFP, FINGERPRINT_SECTOR, rc->volumeLabel);
+	 rc->bufferedSector[rc->readPtr] = rc->readPos;
+	 rc->nSectors[rc->readPtr] = 1;
+	 rc->bufState[rc->readPtr] = BUF_DEAD;
+	 rc->readPtr++;
+	 if(rc->readPtr >= READ_BUFFERS)
+	    rc->readPtr = 0;
+	 g_cond_signal(rc->canWrite);
+	 g_mutex_unlock(rc->mutex);
+	 Closure->readErrors++;
+      }
+
+rev_step:
+      show_progress(rc);
+      rc->readPos--;
+   }
+}
+
 void ReadMediumLinear(gpointer data)
 {  read_closure *rc = g_malloc0(sizeof(read_closure));
    int md5_failure = 0;
@@ -938,6 +1084,16 @@ void ReadMediumLinear(gpointer data)
 
    prepare_crc_cache(rc);
 
+   /*** Reverse mode: complete the image with dead markers (so descending writes
+	leave no sparse holes) and disable order-sensitive on-the-fly checksums;
+	the image data stays correct and ecc creation recomputes them later. */
+
+   if(Closure->reverse && !rc->scanMode)
+   {  fill_to_end(rc);
+      rc->doChecksumsFromImage = 0;
+      rc->doChecksumsFromCodec = FALSE;
+   }
+
    /*** Allocate a bitmap of read sectors to speed up multiple reading passes */
 
    if(Closure->readingPasses > 1)
@@ -998,6 +1154,15 @@ next_reading_pass:
    rc->lastSpeed = -1.0;
    rc->firstSpeedValue = TRUE;
    tao_tail = 0;
+
+   /*** Reverse mode runs a single descending recovery pass instead of the
+	forward cluster loop; multiple passes and forward-only skip logic
+	do not apply. */
+
+   if(Closure->reverse && !rc->scanMode)
+   {  read_reverse(rc);
+      goto reading_done;
+   }
 
    while(rc->readPos<=rc->lastSector)
    {  int cluster_mask = rc->image->dh->clusterSize-1;
@@ -1375,6 +1540,7 @@ step_counter:
 
    /*** Signal EOF to writer thread; wait for it to finish */
 
+reading_done:
    send_eof(rc);
    g_thread_join(rc->worker);
    rc->worker = NULL;
