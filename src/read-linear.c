@@ -828,30 +828,36 @@ static void insert_buttons(GtkDialog *dialog)
 #endif
 
 /*
- * Reverse reading pass: visit the medium from the last sector down to the
- * first, one sector at a time, re-reading only sectors that are not already
- * present in the image. This recovers boundary sectors a forward read
- * overshoots and lets a drive that tracks better in one direction have a go
- * from the other side. It reuses the worker queue, the dead-sector marker
- * writer and the progress display. The image has already been completed with
- * dead markers by fill_to_end(), so a skip means "real data present here".
- * Not cluster-fast on purpose: reverse is a recovery pass, not the bulk pass.
+ * Recovery pass: walk the read range one sector at a time in the given
+ * direction (step = -1 walks last->first, +1 walks first->last) and re-read
+ * only the sectors not already present. Alternating the two directions (the
+ * phased --retry loop) trims a bad region from both edges: a forward pass
+ * recovers up to the front of a defect, a reverse pass up from its tail. A
+ * status map, when present, is authoritative for the skip decision. Returns
+ * the number of sectors recovered. Reuses the worker queue and dead-marker
+ * writer; not cluster-fast on purpose (recovery, not the bulk pass).
  */
 
-static void read_reverse(read_closure *rc)
-{  int status, n;
+static gint64 read_recovery_pass(read_closure *rc, int step)
+{  gint64 recovered = 0;
+   int status, n;
 
-   rc->readPos = rc->lastSector;
+   rc->readPos = (step < 0) ? rc->lastSector : rc->firstSector;
    rc->lastErrorsPrinted = 0;
    rc->previousReadErrors = rc->previousCRCErrors = 0;
    rc->firstSpeedValue = TRUE;
 
-   while(rc->readPos >= rc->firstSector)
+   while(rc->readPos >= rc->firstSector && rc->readPos <= rc->lastSector)
    {
       if(Closure->stopActions)   /* somebody hit the Stop button */
       {  rc->unreportedError = FALSE;
-	 return;
+	 return recovered;
       }
+
+      /*** A status map, when present, is authoritative: skip good sectors. */
+
+      if(rc->mapFile && MapFileStatus(rc->mapFile, rc->readPos) == MAP_GOOD)
+	 goto rec_step;
 
       /*** Skip sectors that are already present (real data) in the image. */
 
@@ -860,7 +866,7 @@ static void read_reverse(read_closure *rc)
 
 	 if(!LargeSeek(rc->readerImage, (gint64)(2048*rc->readPos)))
 	    Stop(_("Failed seeking to sector %" PRId64 " in image [%s]: %s"),
-		 rc->readPos, "reverse", strerror(errno));
+		 rc->readPos, "recovery", strerror(errno));
 	 n = LargeRead(rc->readerImage, sector_buf, 2048);
 	 if(n == 2048)
 	 {  err = CheckForMissingSector(sector_buf, rc->readPos,
@@ -868,7 +874,7 @@ static void read_reverse(read_closure *rc)
 					rc->image->fpSector);
 	    if(err == SECTOR_PRESENT)
 	    {  MapFileMark(rc->mapFile, rc->readPos, MAP_GOOD);
-	       goto rev_step;   /* already have it */
+	       goto rec_step;   /* already have it */
 	    }
 	 }
       }
@@ -908,6 +914,7 @@ static void read_reverse(read_closure *rc)
 	 g_cond_signal(rc->canWrite);
 	 g_mutex_unlock(rc->mutex);
 	 rc->readOK++;
+	 recovered++;
 	 MapFileMark(rc->mapFile, rc->readPos, MAP_GOOD);
       }
       else          /* read failed: keep a dead sector marker so it is tried again */
@@ -936,10 +943,12 @@ static void read_reverse(read_closure *rc)
 	 Closure->readErrors++;
       }
 
-rev_step:
+rec_step:
       show_progress(rc);
-      rc->readPos--;
+      rc->readPos += step;
    }
+
+   return recovered;
 }
 
 void ReadMediumLinear(gpointer data)
@@ -1175,8 +1184,8 @@ next_reading_pass:
 	do not apply. */
 
    if(Closure->reverse && !rc->scanMode)
-   {  read_reverse(rc);
-      goto reading_done;
+   {  read_recovery_pass(rc, -1);
+      goto phased_retry;
    }
 
    while(rc->readPos<=rc->lastSector)
@@ -1555,9 +1564,36 @@ step_counter:
     goto next_reading_pass;
    }
 
+   /*** Phased retry (--retry): after the initial pass, alternate recovery
+	passes in both directions over the sectors still missing, until a whole
+	round recovers nothing (both directions dry) or a safety cap is hit.
+	Alternating directions trims each defect from both edges; a status map,
+	if given, drives which sectors are attempted. ecc-based recovery stays a
+	separate step - run -f between --retry reads, the map and image persist. */
+
+phased_retry:
+   if(Closure->retry && !rc->scanMode && (Closure->readErrors || Closure->crcErrors))
+   {  int step = Closure->reverse ? 1 : -1;   /* start opposite the primary pass */
+      int dry = 0, round;
+
+      for(round = 0; round < 32 && dry < 2; round++)
+      {  gint64 rec;
+
+	 Closure->readErrors = Closure->crcErrors = 0;   /* count only what is still bad */
+	 PrintCLI(_("\nRetry pass %d (%s)...\n"),
+		  round+1, step < 0 ? _("reverse") : _("forward"));
+
+	 rec = read_recovery_pass(rc, step);
+	 if(rec > 0)
+	    PrintCLI(_("Retry pass %d recovered %" PRId64 " sector(s).\n"), round+1, rec);
+
+	 dry  = (rec == 0) ? dry+1 : 0;
+	 step = -step;
+      }
+   }
+
    /*** Signal EOF to writer thread; wait for it to finish */
 
-reading_done:
    send_eof(rc);
    g_thread_join(rc->worker);
    rc->worker = NULL;

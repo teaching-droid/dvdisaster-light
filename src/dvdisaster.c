@@ -107,6 +107,7 @@ typedef enum
    MODIFIER_READ_RAW,
    MODIFIER_REGTEST,
    MODIFIER_RESOURCE_FILE,
+   MODIFIER_RETRY,
    MODIFIER_SCREEN_SHOT,
    MODIFIER_SET_VERSION,
    MODIFIER_SIMULATE_CD,
@@ -275,6 +276,7 @@ int main(int argc, char *argv[])
 	{"read-raw", 0, 0, MODIFIER_READ_RAW},
 	{"regtest", 0, 0, MODIFIER_REGTEST},
 	{"reverse", 0, 0, 'R'},
+	{"retry", 0, 0, MODIFIER_RETRY},
 	{"redundancy", 1, 0, 'n'},
 	{"resource-file", 1, 0, MODIFIER_RESOURCE_FILE},
 	{"scan", 2, 0,'s'},
@@ -330,6 +332,7 @@ int main(int argc, char *argv[])
 		   }
 	           break;
          case 'R': Closure->reverse = TRUE; break;
+         case MODIFIER_RETRY: Closure->retry = TRUE; break;
          case 'j': if(optarg) Closure->sectorSkip = atoi(optarg) & ~0xf;
 	           if(Closure->sectorSkip<0) Closure->sectorSkip = 0;
 		   break;
@@ -1012,6 +1015,8 @@ int main(int argc, char *argv[])
       PrintCLI(_("  -a, --assume x             - assume image is augmented with given codec (RS03)\n"));
       PrintCLI(_("  -j, --jump n               - jump n sectors forward after a read error (default: 16)\n"));
       PrintCLI(_("  -R, --reverse              - read the medium from the end towards the start\n"));
+      PrintCLI(_("  --retry                    - phased recovery: alternate both directions over the\n"
+	         "                               still-missing sectors until no more can be read\n"));
       PrintCLI(_("  -m, --method x             - list/select error correction methods (default: RS03)\n"));
       PrintCLI(_("  -n, --redundancy x         - error correction data redundancy\n"
 		 "                               e.g. 20%%, 32r (roots), 200m (MiB), normal, high\n"

@@ -268,6 +268,7 @@ typedef struct _GlobalClosure
    int sectorSkip;      /* Number of sectors to skip after read error occurs */
    int reverse;         /* read the medium from the end towards the start */
    char *mapFile;       /* ddrescue-format read status/resume map (NULL = off) */
+   int retry;           /* phased alternating-direction retry until no progress */
    char *redundancy;    /* Error correction code redundancy */
    int eccTarget;       /* 0=file; 1=augmented image */
    int readRaw;         /* Read CD sectors raw + verify them */

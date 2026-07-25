@@ -131,6 +131,16 @@ MapFile *MapFileOpen(const char *path, gint64 sectors)
 }
 
 /*
+ * Query the recorded status of a sector.
+ */
+
+int MapFileStatus(MapFile *mf, gint64 sector)
+{  if(!mf || sector < 0 || sector >= mf->sectors)
+      return MAP_UNTRIED;
+   return mf->status[sector];
+}
+
+/*
  * Record the status of a single sector.
  */
 

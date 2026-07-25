@@ -40,6 +40,7 @@ typedef struct _MapFile
 } MapFile;
 
 MapFile *MapFileOpen(const char *path, gint64 sectors);
+int      MapFileStatus(MapFile *mf, gint64 sector);   /* MAP_* ; MAP_UNTRIED if off/out of range */
 void     MapFileMark(MapFile *mf, gint64 sector, int status);
 void     MapFileMarkRange(MapFile *mf, gint64 first, gint64 count, int status);
 int      MapFileSave(MapFile *mf, gint64 current_pos_sector, char current_status);
