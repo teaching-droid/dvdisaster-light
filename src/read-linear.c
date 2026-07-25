@@ -25,6 +25,7 @@
 #include "dvdisaster.h"
 
 #include "read-linear.h"
+#include "mapfile.h"
 #include "scsi-layer.h"
 #include "udf.h"
 
@@ -189,6 +190,7 @@ static void cleanup(gpointer data)
    if(rc->speedTimer) g_timer_destroy(rc->speedTimer);
    if(rc->readTimer)  g_timer_destroy(rc->readTimer);
    if(rc->readMap) FreeBitmap(rc->readMap);
+   if(rc->mapFile) MapFileClose(rc->mapFile);
    if(rc->volumeLabel) g_free(rc->volumeLabel);
 
    if(rc->rendererMutex)
@@ -581,6 +583,9 @@ static void prepare_timer(read_closure *rc)
 static void show_progress(read_closure *rc)
 {  int percent;
 
+   /* Ride the progress tick to flush the status map now and then (throttled). */
+   MapFileFlushMaybe(rc->mapFile, rc->readPos, 5.0);
+
    if(Closure->guiMode && rc->lastErrorsPrinted != Closure->readErrors)
    {  GuiSetLabelText(Closure->readLinearErrors, 
 		      _("Unreadable / skipped sectors: %" PRId64),
@@ -862,7 +867,9 @@ static void read_reverse(read_closure *rc)
 					rc->image->fpState == 2 ? rc->image->imageFP : NULL,
 					rc->image->fpSector);
 	    if(err == SECTOR_PRESENT)
+	    {  MapFileMark(rc->mapFile, rc->readPos, MAP_GOOD);
 	       goto rev_step;   /* already have it */
+	    }
 	 }
       }
 
@@ -901,6 +908,7 @@ static void read_reverse(read_closure *rc)
 	 g_cond_signal(rc->canWrite);
 	 g_mutex_unlock(rc->mutex);
 	 rc->readOK++;
+	 MapFileMark(rc->mapFile, rc->readPos, MAP_GOOD);
       }
       else          /* read failed: keep a dead sector marker so it is tried again */
       {  PrintCLIorLabel(Closure->status, _("Sector %" PRId64 ": %s\n"),
@@ -914,6 +922,7 @@ static void read_reverse(read_closure *rc)
 	 while(rc->bufState[rc->readPtr] != BUF_EMPTY)
 	    g_cond_wait(rc->canRead, rc->mutex);
 
+	 MapFileMark(rc->mapFile, rc->readPos, MAP_BAD);
 	 CreateMissingSector(rc->alignedBuf[rc->readPtr]->buf, rc->readPos,
 			     rc->image->imageFP, FINGERPRINT_SECTOR, rc->volumeLabel);
 	 rc->bufferedSector[rc->readPtr] = rc->readPos;
@@ -1093,6 +1102,12 @@ void ReadMediumLinear(gpointer data)
       rc->doChecksumsFromImage = 0;
       rc->doChecksumsFromCodec = FALSE;
    }
+
+   /*** Open the ddrescue-format status map if requested. It records read
+	status in parallel with the image and never changes an image byte. */
+
+   if(Closure->mapFile)
+      rc->mapFile = MapFileOpen(Closure->mapFile, rc->image->dh->sectors);
 
    /*** Allocate a bitmap of read sectors to speed up multiple reading passes */
 
@@ -1377,6 +1392,7 @@ reread:
 	 g_mutex_unlock(rc->mutex);
 	 
 	 rc->readOK += nsectors;
+	 MapFileMarkRange(rc->mapFile, rc->readPos, nsectors, MAP_GOOD);
 
       }
 
@@ -1429,6 +1445,7 @@ reread:
 	       {  g_cond_wait(rc->canRead, rc->mutex);
 	       }
 
+	       MapFileMark(rc->mapFile, rc->readPos+i, MAP_BAD);
 	       CreateMissingSector(rc->alignedBuf[rc->readPtr]->buf, rc->readPos+i, 
 				   rc->image->imageFP, FINGERPRINT_SECTOR, rc->volumeLabel);
 

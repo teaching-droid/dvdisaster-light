@@ -63,6 +63,7 @@ typedef struct
 
    gint64 readPos;                   /* current sector reading position */
    Bitmap *readMap;                  /* map of already read sectors */
+   struct _MapFile *mapFile;         /* ddrescue-format status map (NULL = off) */
 
    gint64 readMarker;
    int rereading;                    /* TRUE if working on existing image */
