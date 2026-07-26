@@ -37,7 +37,7 @@ Files and augmented images produced by dvdisaster Light are **bit-identical** to
 
 ## Version scheme
 
-`dvdisaster Light 0.2.0 (based on dvdisaster 0.79.10-pl6)`: the Light version counts this fork's own releases; the base version names the exact upstream state the codec derives from. The on-disk format version fields stay tied to the base version so other dvdisaster versions interpret the files correctly.
+`dvdisaster Light 0.3.0 (based on dvdisaster 0.79.10-pl6)`: the Light version counts this fork's own releases; the base version names the exact upstream state the codec derives from. The on-disk format version fields stay tied to the base version so other dvdisaster versions interpret the files correctly.
 
 ## Building
 

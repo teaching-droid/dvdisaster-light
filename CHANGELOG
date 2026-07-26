@@ -1,5 +1,32 @@
 dvdisaster Light changelog
 
+0.3.0 (2026-07-26)
+
+- reader hardening for damaged discs; all of it is off by default, so a
+  normal read behaves exactly as before:
+  - reverse reading (-R) recovers sectors a forward read overshoots
+  - a crash-safe, resumable read status map in GNU ddrescue format
+    (--mapfile); ddrescuelog works on it unmodified
+  - phased both-direction recovery (--retry) trims each defect from both
+    edges until no more can be read
+  - a per-read give-up for dying discs (--read-timeout): a read that
+    stalls is dropped and retried on a later pass
+  - full recovery in one command (--rescue): loop reading (with --retry)
+    and filling from ecc until the image is complete
+- new RECOVERY.md documents the recovery options, a workflow, ddrescuelog
+  interoperability and multi-drive "best of N"
+
+0.2.0 (2026-07-22)
+
+- added an OpenCL GPU encoder for RS03 with device selection
+  (--encoding-device auto|cpu|gpu[:n]|list); it picks the strongest GPU
+  and falls back to the CPU when no OpenCL driver is present
+- added an AVX2 CPU encoder next to the SSE2 one, chosen at run time
+- encoding starts instantly and writes far less: ecc files are no longer
+  pre-written with placeholder sectors, and parity is written in batches
+- the GPU output is verified bit-identical to the CPU encoders on every
+  device (regtest/gpu-parity.bash)
+
 0.1.0 (2026-07-21)
 
 - first release of dvdisaster Light, a CLI-only fork of dvdisaster

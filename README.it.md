@@ -29,6 +29,7 @@ Aggiunto dal fork:
 * una ripartizione dei tempi della pipeline con `--verbose`
 * un controllo di parità GPU (`regtest/gpu-parity.bash`) che verifica per ogni dispositivo GPU l'identità bit per bit con i codificatori CPU
 * Windows 7 SP1 e successivi restano supportati (verificato automaticamente nella CI)
+* **robustezza in lettura per dischi danneggiati**: lettura all'indietro (`-R`), una mappa di stato ripristinabile e a prova di crash nel formato GNU ddrescue (`--mapfile`, così `ddrescuelog` funziona su di essa), recupero a fasi in entrambe le direzioni (`--retry`), un limite di tempo per lettura sui dischi morenti (`--read-timeout`) e il recupero completo in un solo comando che alterna lettura e riempimento da ecc finché l'immagine non è completa (`--rescue`). Vedere [RECOVERY.md](RECOVERY.md).
 
 ## Promessa di compatibilità
 
@@ -36,7 +37,7 @@ I file e le immagini aumentate prodotti da dvdisaster Light sono **identici bit 
 
 ## Schema delle versioni
 
-`dvdisaster Light 0.2.0 (based on dvdisaster 0.79.10-pl6)`: la versione Light conta le uscite di questo fork; la versione base indica lo stato esatto del progetto originale da cui deriva il codec. I campi di versione nel formato dei file restano legati alla versione base, così le altre versioni di dvdisaster interpretano correttamente i file.
+`dvdisaster Light 0.3.0 (based on dvdisaster 0.79.10-pl6)`: la versione Light conta le uscite di questo fork; la versione base indica lo stato esatto del progetto originale da cui deriva il codec. I campi di versione nel formato dei file restano legati alla versione base, così le altre versioni di dvdisaster interpretano correttamente i file.
 
 ## Compilazione
 

@@ -201,7 +201,7 @@ typedef void PangoLayout;
    dvdisaster base stays untouched: it feeds the on-disk creatorVersion fields,
    which must keep matching what original dvdisaster writes and expects. */
 
-#define LIGHT_VERSION "0.2.0"
+#define LIGHT_VERSION "0.3.0"
 
 #define MAX_OLD_CACHE_SIZE  8096         /* old cache for RS01/RS02  */
 #define MAX_PREFETCH_CACHE_SIZE (512*1024)   /* up to 0.5TB RS03  */
