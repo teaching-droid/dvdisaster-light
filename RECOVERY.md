@@ -142,3 +142,10 @@ into image `a`.
   for your own data discs or already-unprotected content.
 * For the underlying error-correction workflow (creating and using ecc files), see the
   main documentation and `dvdisaster --help`.
+
+## Credits
+
+The status map and the recovery approach here follow [**GNU ddrescue**](https://www.gnu.org/software/ddrescue/)
+by Antonio Diaz Diaz. `--mapfile` uses ddrescue's mapfile format, so its `ddrescuelog` tool
+works on these maps unchanged, and the phased both-direction recovery follows ddrescue's copy /
+trim / scrape approach. No ddrescue code is used here; the algorithms are reimplemented.

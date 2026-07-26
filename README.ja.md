@@ -71,4 +71,6 @@ pacman -S --needed git diffutils make pkg-config mingw-w64-x86_64-glib2 mingw-w6
 
 本フォークは、dvdisaster を生み出し長年保守してきた **Carsten Gnoerlich** 氏、**dvdisaster 開発チーム**、そして本コードの直接の土台である 0.79.10-pl6 を保守し、このようなフォークの維持を可能にする回帰テストを整備した **speed47** 氏の仕事の上に成り立っています。
 
+本フォークが追加した回復機能(`-R`、`--mapfile`、`--retry`、`--rescue`)は、Antonio Diaz Diaz 氏による **GNU ddrescue** に着想を得ています。`--mapfile` は ddrescue の [mapfile 形式](https://www.gnu.org/software/ddrescue/)で書き出すため、その `ddrescuelog` ツールがマップをそのまま扱えます。ddrescue のコードは使用しておらず、アルゴリズムは独自に再実装しています。
+
 dvdisaster Light は **GNU General Public License v3**([COPYING](COPYING) 参照)のフリーソフトウェアです。dvdisaster の改変版であり、オリジナルの作者とは関係ありません。各リリースの完全なソースコードはバイナリと共に本リポジトリで公開されます。

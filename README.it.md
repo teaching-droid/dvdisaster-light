@@ -71,4 +71,6 @@ Due consigli pratici: scrivere il file di correzione su un **disco diverso** da 
 
 Questo fork poggia sul lavoro di **Carsten Gnoerlich**, che ha creato dvdisaster e lo ha mantenuto per molti anni, del **team di sviluppo di dvdisaster** e di **speed47**, il cui fork mantenuto (0.79.10-pl6) è la base diretta di questo codice e la cui suite di regressione rende sostenibile un fork come questo.
 
+Le funzioni di recupero aggiunte da questo fork (`-R`, `--mapfile`, `--retry`, `--rescue`) sono ispirate a **GNU ddrescue** di Antonio Diaz Diaz; `--mapfile` scrive il [formato mapfile](https://www.gnu.org/software/ddrescue/) di ddrescue, così il suo strumento `ddrescuelog` funziona sulle mappe senza modifiche. Non viene incluso alcun codice di ddrescue; gli algoritmi sono reimplementati in modo indipendente.
+
 dvdisaster Light è software libero sotto la **GNU General Public License v3** (vedi [COPYING](COPYING)); è una versione modificata di dvdisaster e non è associato agli autori originali. Il sorgente completo di ogni uscita è pubblicato qui insieme ai binari.
