@@ -16,6 +16,7 @@ They only change behaviour when you ask for them, so scripts are unaffected.
 | `-d, --device dev` | which drive to read from (e.g. `-d G:` on Windows, `-d /dev/sr0` on Linux) |
 | `-R, --reverse` | read the medium from the last sector to the first |
 | `--retry` | phased recovery: after the first pass, alternate both directions over the still-missing sectors until no more can be read |
+| `--rescue` | full recovery in one command: loop reading (with `--retry`) and filling from ecc until the image is complete (needs an ecc file, `-e`) |
 | `--mapfile file` | keep a crash-safe, resumable status map in GNU ddrescue format |
 | `--read-timeout n` | give up on any read that takes longer than `n` seconds and move on (for dying discs) |
 | `-j, --jump n` | after a read error, skip `n` sectors forward before trying again (default 16) |
@@ -71,8 +72,24 @@ Alternating directions trims each defect from both edges. If a `--mapfile` is pr
 drives which sectors are attempted (already-good sectors are skipped). This turns the old
 "read, then read again, then read the other way" by hand into one command.
 
-Error-correction-based recovery still happens as a separate `-f` step (see the workflow
-above); the map and image persist between commands, so it composes cleanly.
+## Full automatic recovery (`--rescue`)
+
+If you have an ecc file, `--rescue` does the whole loop for you in one command: read what the
+drive can (with both-direction `--retry`), fill what the RS03 parity can reconstruct, re-read
+the sectors the parity could not fix, and repeat until the image is complete or nothing more
+can be recovered:
+
+```
+dvdisaster --rescue -i disc.iso -e disc.ecc --mapfile disc.map -d G:
+```
+
+Each round only re-attempts the sectors still missing, and the fill reconstructs whatever the
+drive cannot read at all (as long as the remaining damage is within the parity you added). It
+stops when the image is whole, when a whole round makes no progress, or after a safety limit
+of rounds. Without an ecc file it simply does the read-and-retry part and reports what remains.
+
+`--rescue` is the automated form of steps 1 to 4 above; run the steps by hand if you want more
+control over each pass.
 
 ## Giving up on slow sectors (`--read-timeout`)
 

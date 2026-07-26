@@ -107,6 +107,7 @@ typedef enum
    MODIFIER_READ_RAW,
    MODIFIER_READ_TIMEOUT,
    MODIFIER_REGTEST,
+   MODIFIER_RESCUE,
    MODIFIER_RESOURCE_FILE,
    MODIFIER_RETRY,
    MODIFIER_SCREEN_SHOT,
@@ -119,8 +120,82 @@ typedef enum
    MODIFIER_VERSION,
 } run_mode;
 
+/*
+ * Full recovery loop (--rescue): read what the drive can (with both-direction
+ * --retry), fill what the RS03 parity can reconstruct, re-read the sectors the
+ * parity could not fix, and repeat until the image is complete or a whole round
+ * makes no progress. ReadMediumLinear and the fixer each manage their own file
+ * handles; RS03Fix closes the image via its own cleanup and reports completeness
+ * through exitCode (0 = all present, 1 = all repaired, 2 = some unrepaired). The
+ * image and the optional mapfile persist between rounds, so each read only
+ * re-attempts the still-missing sectors.
+ */
+
+static void RescueImage(void)
+{  gint64 prev_missing = -1;
+   int max_rounds = 16;
+   int round;
+
+   for(round = 0; round < max_rounds; round++)
+   {  Image *image;
+      Method *method = NULL;
+
+      if(round > 0)
+	 PrintLog(_("\n--- Rescue round %d: reading the remaining sectors ---\n"), round+1);
+
+      ReadMediumLinear((gpointer)0);
+
+      {  gint64 bad = Closure->readErrors + Closure->crcErrors;  /* unreadable + silently corrupt */
+
+	 if(bad == 0)
+	 {  PrintLog(_("\nRescue: the image is complete.\n"));
+	    return;
+	 }
+	 if(bad == prev_missing)   /* neither this read nor the last fill helped */
+	 {  PrintLog(_("\nRescue: no further progress; %" PRId64 " sectors still unreadable or damaged.\n"),
+		     bad);
+	    exitCode = EXIT_FAILURE;
+	    return;
+	 }
+	 prev_missing = bad;
+      }
+
+      /*** Fill what the error correction data allows. */
+
+      image = OpenImageFromFile(Closure->imageName, O_RDWR, IMG_PERMS);
+      if(image)
+	 image = OpenEccFileForImage(image, Closure->eccName, O_RDWR, IMG_PERMS);
+
+      if(image && image->eccFileMethod)   method = image->eccFileMethod;
+      else if(image && image->eccMethod)  method = image->eccMethod;
+
+      if(!method)   /* no ecc to fill with: the read passes are all we can do */
+      {  if(image) CloseImage(image);
+	 PrintLog(_("\nRescue: no error correction data available; "
+		    "%" PRId64 " sectors remain unreadable or damaged.\n"),
+		  Closure->readErrors + Closure->crcErrors);
+	 exitCode = EXIT_FAILURE;
+	 return;
+      }
+
+      PrintLog(_("\n--- Rescue round %d: filling from error correction data ---\n"), round+1);
+      exitCode = 0;
+      method->fix(image);   /* closes the image itself; sets exitCode */
+
+      if(exitCode != 2)     /* 0 = all present, 1 = all repaired -> complete */
+      {  PrintLog(_("\nRescue: the image was restored using error correction.\n"));
+	 return;
+      }
+      /* exitCode == 2: some sectors still unrepaired -> loop and re-read them */
+   }
+
+   PrintLog(_("\nRescue: reached the %d-round limit; some sectors may remain unreadable.\n"),
+	    max_rounds);
+   exitCode = EXIT_FAILURE;
+}
+
 int main(int argc, char *argv[])
-{  int mode = MODE_NONE; 
+{  int mode = MODE_NONE;
    int sequence = MODE_NONE;
    char *debug_arg = NULL;
    char *read_range = NULL;
@@ -277,6 +352,7 @@ int main(int argc, char *argv[])
 	{"read-raw", 0, 0, MODIFIER_READ_RAW},
 	{"read-timeout", 1, 0, MODIFIER_READ_TIMEOUT},
 	{"regtest", 0, 0, MODIFIER_REGTEST},
+	{"rescue", 0, 0, MODIFIER_RESCUE},
 	{"reverse", 0, 0, 'R'},
 	{"retry", 0, 0, MODIFIER_RETRY},
 	{"redundancy", 1, 0, 'n'},
@@ -335,6 +411,11 @@ int main(int argc, char *argv[])
 	           break;
          case 'R': Closure->reverse = TRUE; break;
          case MODIFIER_RETRY: Closure->retry = TRUE; break;
+         case MODIFIER_RESCUE:
+	    Closure->rescue = TRUE;
+	    Closure->retry  = TRUE;                     /* rescue implies both-direction retry */
+	    mode = MODE_SEQUENCE; sequence |= 1<<MODE_READ;
+	    break;
          case 'j': if(optarg) Closure->sectorSkip = atoi(optarg) & ~0xf;
 	           if(Closure->sectorSkip<0) Closure->sectorSkip = 0;
 		   break;
@@ -841,6 +922,10 @@ int main(int argc, char *argv[])
 
    switch(mode)
    {  case MODE_SEQUENCE:
+	if(Closure->rescue)   /* full read + ecc-fill recovery loop */
+	{  RescueImage();
+	   break;
+	}
 	if(sequence & 1<<MODE_SCAN)
 	  ReadMediumLinear((gpointer)1);
 
@@ -1023,6 +1108,8 @@ int main(int argc, char *argv[])
       PrintCLI(_("  -R, --reverse              - read the medium from the end towards the start\n"));
       PrintCLI(_("  --retry                    - phased recovery: alternate both directions over the\n"
 	         "                               still-missing sectors until no more can be read\n"));
+      PrintCLI(_("  --rescue                   - full recovery: loop reading (with --retry) and filling\n"
+	         "                               from ecc until the image is complete (needs -e ecc file)\n"));
       PrintCLI(_("  -m, --method x             - list/select error correction methods (default: RS03)\n"));
       PrintCLI(_("  -n, --redundancy x         - error correction data redundancy\n"
 		 "                               e.g. 20%%, 32r (roots), 200m (MiB), normal, high\n"
