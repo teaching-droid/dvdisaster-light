@@ -8,6 +8,10 @@ failing disc.
 All of these options are **off by default**: a plain `-r` read behaves exactly as before.
 They only change behaviour when you ask for them, so scripts are unaffected.
 
+For an illustrated walkthrough of *how* each feature works, see
+[HOW_IT_WORKS.md](HOW_IT_WORKS.md) (also in [Deutsch](HOW_IT_WORKS.de.md),
+[日本語](HOW_IT_WORKS.ja.md), [Italiano](HOW_IT_WORKS.it.md)).
+
 ## The reading options
 
 | Option | What it does |

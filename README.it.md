@@ -29,7 +29,7 @@ Aggiunto dal fork:
 * una ripartizione dei tempi della pipeline con `--verbose`
 * un controllo di parità GPU (`regtest/gpu-parity.bash`) che verifica per ogni dispositivo GPU l'identità bit per bit con i codificatori CPU
 * Windows 7 SP1 e successivi restano supportati (verificato automaticamente nella CI)
-* **robustezza in lettura per dischi danneggiati**: lettura all'indietro (`-R`), una mappa di stato ripristinabile e a prova di crash nel formato GNU ddrescue (`--mapfile`, così `ddrescuelog` funziona su di essa), recupero a fasi in entrambe le direzioni (`--retry`), un limite di tempo per lettura sui dischi morenti (`--read-timeout`) e il recupero completo in un solo comando che alterna lettura e riempimento da ecc finché l'immagine non è completa (`--rescue`). Vedere [RECOVERY.md](RECOVERY.md).
+* **robustezza in lettura per dischi danneggiati**: lettura all'indietro (`-R`), una mappa di stato ripristinabile e a prova di crash nel formato GNU ddrescue (`--mapfile`, così `ddrescuelog` funziona su di essa), recupero a fasi in entrambe le direzioni (`--retry`), un limite di tempo per lettura sui dischi morenti (`--read-timeout`) e il recupero completo in un solo comando che alterna lettura e riempimento da ecc finché l'immagine non è completa (`--rescue`). Vedere [RECOVERY.md](RECOVERY.md) o [HOW_IT_WORKS.it.md](HOW_IT_WORKS.it.md) per una spiegazione illustrata.
 
 ## Promessa di compatibilità
 

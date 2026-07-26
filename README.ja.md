@@ -29,7 +29,7 @@ dvdisaster はディスクイメージをリード・ソロモン方式のパリ
 * `--verbose` でパイプラインの時間内訳を表示
 * GPU パリティゲート(`regtest/gpu-parity.bash`): すべての GPU デバイスが CPU エンコーダとビット単位で同一の出力を生成することを検証
 * Windows 7 SP1 以降のサポート継続(CI で自動監査)
-* **損傷ディスク向けの読み取り強化**: 逆方向読み取り(`-R`)、GNU ddrescue 形式のクラッシュ耐性がある再開可能なステータスマップ(`--mapfile`、`ddrescuelog` がそのまま使えます)、両方向を交互に行うフェーズ回復(`--retry`)、瀕死のディスク向けの読み取りごとのタイムアウト(`--read-timeout`)、そしてイメージが完成するまで読み取りと ecc 補完を繰り返す 1 コマンド完全回復(`--rescue`)。詳細は [RECOVERY.md](RECOVERY.md) を参照。
+* **損傷ディスク向けの読み取り強化**: 逆方向読み取り(`-R`)、GNU ddrescue 形式のクラッシュ耐性がある再開可能なステータスマップ(`--mapfile`、`ddrescuelog` がそのまま使えます)、両方向を交互に行うフェーズ回復(`--retry`)、瀕死のディスク向けの読み取りごとのタイムアウト(`--read-timeout`)、そしてイメージが完成するまで読み取りと ecc 補完を繰り返す 1 コマンド完全回復(`--rescue`)。詳細は [RECOVERY.md](RECOVERY.md) を、図解は [HOW_IT_WORKS.ja.md](HOW_IT_WORKS.ja.md) を参照。
 
 ## 互換性の約束
 
