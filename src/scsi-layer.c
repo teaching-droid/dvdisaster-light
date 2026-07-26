@@ -27,6 +27,20 @@
 #include "scsi-layer.h"
 #include "udf.h"
 
+/*
+ * Read-command timeout selector. For bulk sector reads (READ(10)/READ(12)/
+ * READ CD) honour --read-timeout, so a dying disc that stalls on one sector is
+ * given up on and retried on a later pass instead of hanging for minutes;
+ * control commands keep the conservative driver default. Returns seconds.
+ */
+
+int ScsiReadTimeout(int opcode, int default_secs)
+{  if(Closure->readTimeout > 0
+      && (opcode == 0x28 || opcode == 0xa8 || opcode == 0xbe))
+      return Closure->readTimeout;
+   return default_secs;
+}
+
 /***
  *** Forward declarations
  ***/

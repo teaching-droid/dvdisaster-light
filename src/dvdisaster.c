@@ -105,6 +105,7 @@ typedef enum
    MODIFIER_READ_ATTEMPTS,
    MODIFIER_READ_MEDIUM,
    MODIFIER_READ_RAW,
+   MODIFIER_READ_TIMEOUT,
    MODIFIER_REGTEST,
    MODIFIER_RESOURCE_FILE,
    MODIFIER_RETRY,
@@ -274,6 +275,7 @@ int main(int argc, char *argv[])
 	{"read-medium", 1, 0, MODIFIER_READ_MEDIUM },
 	{"read-sector", 1, 0, MODE_READ_SECTOR},
 	{"read-raw", 0, 0, MODIFIER_READ_RAW},
+	{"read-timeout", 1, 0, MODIFIER_READ_TIMEOUT},
 	{"regtest", 0, 0, MODIFIER_REGTEST},
 	{"reverse", 0, 0, 'R'},
 	{"retry", 0, 0, MODIFIER_RETRY},
@@ -627,6 +629,10 @@ int main(int argc, char *argv[])
 	    {  if(Closure->mapFile) g_free(Closure->mapFile);
 	       Closure->mapFile = g_strdup(optarg);
 	    }
+	    break;
+         case MODIFIER_READ_TIMEOUT:
+	    if(optarg) Closure->readTimeout = atoi(optarg);
+	    if(Closure->readTimeout < 0) Closure->readTimeout = 0;
 	    break;
         case MODIFIER_READ_MEDIUM:
 	   Closure->readingPasses = atoi(optarg);
@@ -1051,6 +1057,8 @@ int main(int argc, char *argv[])
       PrintCLI(_("  --raw-mode n               - mode for raw reading CD media (20 or 21)\n"));
       PrintCLI(_("  --read-attempts n-m        - attempts n up to m reads of a defective sector\n"));
       PrintCLI(_("  --read-medium n            - read the whole medium up to n times\n"));
+      PrintCLI(_("  --read-timeout n           - give up on a read after n seconds (dying discs);\n"
+	         "                               the sector is marked and retried on a later pass\n"));
       PrintCLI(_("  --read-raw                 - performs read in raw mode if possible\n"));
       PrintCLI(_("  --regtest                  - tweaks output for compatibility with regtests\n"));
       PrintCLI(_("  --resource-file p          - get resource file from given path\n"));

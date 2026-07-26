@@ -221,7 +221,7 @@ static int send_spti_packet(HANDLE fd, unsigned char *cmd, int cdb_size, char *b
 	return -1;
    }
    ss.spt.DataTransferLength 	= size;
-   ss.spt.TimeOutValue    	= 120;  /* see comment above */
+   ss.spt.TimeOutValue    	= ScsiReadTimeout(cmd[0], 120);  /* see comment above; --read-timeout for reads */
    ss.spt.DataBuffer      	= buf;
    ss.spt.SenseInfoOffset 	= offsetof(SCSI_PASS_THROUGH_DIRECT_WITH_BUFFER, SenseBuf);
    memcpy(ss.spt.Cdb, cmd, cdb_size);

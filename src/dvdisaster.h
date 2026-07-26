@@ -269,6 +269,7 @@ typedef struct _GlobalClosure
    int reverse;         /* read the medium from the end towards the start */
    char *mapFile;       /* ddrescue-format read status/resume map (NULL = off) */
    int retry;           /* phased alternating-direction retry until no progress */
+   int readTimeout;     /* per-read-command give-up in seconds (0 = driver default) */
    char *redundancy;    /* Error correction code redundancy */
    int eccTarget;       /* 0=file; 1=augmented image */
    int readRaw;         /* Read CD sectors raw + verify them */
@@ -1463,6 +1464,8 @@ typedef struct _AlignedBuffer
 
 AlignedBuffer *CreateAlignedBuffer(int);
 void FreeAlignedBuffer(AlignedBuffer*);
+
+int ScsiReadTimeout(int opcode, int default_secs);
 
 char* DefaultDevice(void);
 gint64 CurrentImageSize(void);

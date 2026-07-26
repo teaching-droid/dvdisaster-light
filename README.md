@@ -29,6 +29,7 @@ Added by the fork:
 * a pipeline timing breakdown under `--verbose`
 * a GPU parity gate (`regtest/gpu-parity.bash`) that verifies every GPU device produces bit-identical output to the CPU encoders
 * Windows 7 SP1 and newer remain supported (audited automatically in CI)
+* **reader hardening for damaged discs**: reverse reading (`-R`), a crash-safe resumable status map in GNU ddrescue format (`--mapfile`, so `ddrescuelog` works on it), phased both-direction recovery (`--retry`), and a per-read give-up for dying discs (`--read-timeout`). See [RECOVERY.md](RECOVERY.md).
 
 ## Compatibility promise
 

@@ -249,7 +249,7 @@ static int send_packet_cdrom(DeviceHandle *dh, unsigned char *cmd, int cdb_size,
    cgc.buffer = buf;
    cgc.buflen = size;
    cgc.sense  = (struct request_sense*)sense;
-   cgc.timeout = 10*60*HZ;   /* 10 minutes; a timeout hangs newer kernels  */
+   cgc.timeout = ScsiReadTimeout(cmd[0], 10*60)*HZ;   /* default 10 min; --read-timeout for reads */
 
    switch(data_mode)
    {  case DATA_READ:
@@ -305,7 +305,7 @@ static int send_packet_generic(DeviceHandle *dh, unsigned char *cmd, int cdb_siz
    sg_io.dxferp	      = buf;
    sg_io.cmdp	      = cmd;
    sg_io.sbp	      = (unsigned char*)sense;
-   sg_io.timeout      = 10*60*1000;
+   sg_io.timeout      = ScsiReadTimeout(cmd[0], 10*60)*1000;   /* default 10 min; --read-timeout for reads */
    sg_io.flags	      = SG_FLAG_LUN_INHIBIT|SG_FLAG_DIRECT_IO;
 
 
